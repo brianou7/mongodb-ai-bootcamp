@@ -19,6 +19,10 @@ interface VoyageEmbeddingResponse {
   data: Array<{ embedding: number[]; index: number }>;
 }
 
+interface ContextualInput {
+  text: string;
+}
+
 export class VoyageEmbeddings extends Embeddings {
   private readonly model: string;
   private readonly dimensions: number;
@@ -43,6 +47,48 @@ export class VoyageEmbeddings extends Embeddings {
     const [vector] = await this.embed([text], "query");
     if (!vector) throw new Error("Voyage returned no embedding for the query.");
     return vector;
+  }
+
+  /**
+   * Contextualized embeddings: the full document is sent as context so each
+   * chunk's vector captures surrounding meaning ("el umbral" → knows the value).
+   * Use only during corpus load; query embeddings stay on embedQuery() above.
+   * Requires VOYAGE_EMBEDDING_MODEL=voyage-context-4.
+   */
+  async embedChunksWithContext(chunks: string[], docContext: string): Promise<number[][]> {
+    if (chunks.length === 0) return [];
+    const inputs: ContextualInput[] = chunks.map((text) => ({ text }));
+    const res = await fetch(`${this.apiBase}/contextualizedembeddings`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${this.apiKey}`,
+      },
+      body: JSON.stringify({
+        inputs,
+        context: docContext,
+        model: this.model,
+        input_type: "document",
+        output_dimension: this.dimensions,
+      }),
+    });
+
+    if (!res.ok) {
+      throw new Error(
+        `Voyage contextualizedembeddings failed: HTTP ${res.status} ${await res.text()}` +
+          `\nIf the proxy returned 404, set VOYAGE_API_BASE=https://api.voyageai.com/v1 with your own pa-... key.`,
+      );
+    }
+
+    const body = (await res.json()) as VoyageEmbeddingResponse;
+    const ordered = new Array<number[]>(chunks.length);
+    for (const item of body.data) {
+      ordered[item.index] = item.embedding;
+    }
+    for (let i = 0; i < ordered.length; i++) {
+      if (!ordered[i]) throw new Error(`Voyage contextualizedembeddings missing index ${i}.`);
+    }
+    return ordered as number[][];
   }
 
   private async embed(input: string[], inputType: VoyageInputType): Promise<number[][]> {

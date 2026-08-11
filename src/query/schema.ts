@@ -11,7 +11,7 @@
  * vague description here produces confidently wrong answers, which is the
  * failure mode that costs the most time to notice.
  *
- * Replace ACTIVITY_EVENTS_DESCRIPTION with your own, and cover five things:
+ * Replace the collection description with your own, and cover five things:
  *
  * 1. One line saying what a single document IS. "One document per support
  *    ticket" tells the model whether to count documents or group them.
@@ -45,54 +45,152 @@
  * to get a Spanish `explanation` back.
  */
 
-export const ACTION_TYPES = [
-  "LOGIN",
-  "BALANCE_QUERY",
-  "TRANSFER_INITIATED",
-  "TRANSFER_APPROVED",
-  "USER_CREATED",
-  "USER_MODIFIED",
-] as const;
-export type ActionType = (typeof ACTION_TYPES)[number];
+// --- Enums (single source of truth, imported by the data generator) ----------
 
-export const CHANNELS = ["WEB", "MOBILE", "API", "BRANCH"] as const;
+export const CHANNELS = ["APP", "NEG", "SVP"] as const;
 export type Channel = (typeof CHANNELS)[number];
 
-export const STATUSES = ["SUCCESS", "FAILED", "PENDING"] as const;
-export type Status = (typeof STATUSES)[number];
+export const TRANSACTION_TYPES = ["Monetaria", "No monetaria", "Administrativa"] as const;
+export type TransactionType = (typeof TRANSACTION_TYPES)[number];
 
-/** Monetary actions carry a non-zero `amount` (in minor units); others are 0. */
-export const MONETARY_ACTIONS: ReadonlySet<ActionType> = new Set<ActionType>([
-  "TRANSFER_INITIATED",
-  "TRANSFER_APPROVED",
-]);
+export const TRANSACTION_STATES = ["Exitosa", "Técnicamente exitosa", "No exitosa"] as const;
+export type TransactionState = (typeof TRANSACTION_STATES)[number];
 
-const ACTIVITY_EVENTS_DESCRIPTION = `Collection: activity_events
-One document per operational event at the bank. Fields:
-  _id        string   stable id like "evt_0001"
-  userId     string   actor id like "user_03"
-  userName   string   actor display name, e.g. "Priya Nair"
-  action     string   one of: ${ACTION_TYPES.join(", ")}
-  amount     number   money moved in MINOR UNITS (cents). Non-zero only for
-                      ${[...MONETARY_ACTIONS].join(" and ")}; 0 otherwise.
-                      Example: amount 1500000 means 15,000.00 in currency units.
-  channel    string   one of: ${CHANNELS.join(", ")}
-  status     string   one of: ${STATUSES.join(", ")}
-  timestamp  Date     BSON date when the event occurred (UTC)
+export const DOCUMENT_TYPES = ["CC", "CD", "TI", "CE", "NIT", "PAS", "IEPN", "IEPJ", "FD", "RC"] as const;
+export type DocumentType = (typeof DOCUMENT_TYPES)[number];
 
-Guidance for pipelines:
-  - "how much did user X move" => sum amount for that user, usually filtered to
-    transfer actions and/or status SUCCESS.
-  - "largest transfer this month" => filter action in the transfer actions and
-    timestamp within the current calendar month, sort amount descending.
-  - Amounts are integers in minor units; divide by 100 for display only, not in
-    the pipeline unless asked.
-  - timestamp is a real BSON Date. A plain string never matches a Date, so write
-    dates as Extended JSON: {"timestamp": {"$gte": {"$date": "2026-08-01T00:00:00Z"}}}
-    For windows relative to now, prefer $$NOW so the query stays correct later:
-    {"$match": {"$expr": {"$gte": ["$timestamp", {"$dateTrunc": {"date": "$$NOW", "unit": "month"}}]}}}
-  - Never assume the data is empty because a date filter returned nothing. Check
-    the filter's types first.`;
+export const PRODUCT_TYPES = ["CUENTA_DE_AHORRO", "CUENTA_CORRIENTES", "TARJETA_DE_CREDITO"] as const;
+export type ProductType = (typeof PRODUCT_TYPES)[number];
+
+export const DESTINY_PRODUCT_RELATIONS = ["Propia", "Inscrita", "No inscrita", "Otros bancos", "Inscrita programada", "Programada"] as const;
+export type DestinyProductRelation = (typeof DESTINY_PRODUCT_RELATIONS)[number];
+
+export const TRANSACTION_MODES = ["Virtual", "Presencial nacional", "Presencial internacional", "Debito automático"] as const;
+export type TransactionMode = (typeof TRANSACTION_MODES)[number];
+
+export const AUTHENTICATION_TYPES = ["Credenciales", "Biometría huella", "Biometría faceid", "Token", "OTP"] as const;
+export type AuthenticationType = (typeof AUTHENTICATION_TYPES)[number];
+
+export const ENTITLEMENT_ROLES = ["Titular", "Titular Rep Legal"] as const;
+export type EntitlementRole = (typeof ENTITLEMENT_ROLES)[number];
+
+export const ENTITLEMENT_PRIVILEGES = ["Admon Autonomo", "Aprobador", "Preparador", "Preparador/Aprobador", "Consultor"] as const;
+export type EntitlementPrivilege = (typeof ENTITLEMENT_PRIVILEGES)[number];
+
+export const OPERATION_TYPES = ["Inscripción", "Modificación", "Eliminación"] as const;
+export type OperationType = (typeof OPERATION_TYPES)[number];
+
+export const APPROVAL_STATUSES = ["Aprobado", "Rechazado", "Preparado", "Cancelado"] as const;
+export type ApprovalStatus = (typeof APPROVAL_STATUSES)[number];
+
+/** transactionValule is non-zero only when transactionType equals this value. */
+export const MONETARY_TRANSACTION_TYPE = "Monetaria" as const;
+
+// --- Collection description --------------------------------------------------
+
+const GCR_DESCRIPTION = `Collection: galatea-central-repository
+One document per transaction event processed by a bank channel. Covers both monetary
+events (transfers, payments) and non-monetary events (balance queries, user
+modifications, logins). One row = one event; aggregate to answer "how much / how many".
+
+IDENTITY FIELDS:
+  _id                          string  stable id, e.g. "rcc_00001"
+  documentNumber               string  the account holder's ID number, e.g. "79456123"
+  documentType                 string  one of: ${DOCUMENT_TYPES.join(", ")}
+  customerName                 string  display name of the account holder, e.g. "Pedro Picapiedra"
+  authorizedUserName           string  name of a DELEGATE who acted on behalf of the account
+                                       holder; absent when the holder transacted directly
+  authorizedUserdocumentNumber string  delegate's ID number; absent when no delegate
+  channel                      string  one of: ${CHANNELS.join(", ")}
+
+TRANSACTION CLASSIFICATION:
+  transactionType            string  one of: ${TRANSACTION_TYPES.join(", ")}
+  transactionState           string  one of: ${TRANSACTION_STATES.join(", ")}
+  transactionCode            string  code for the transaction type, e.g. "0320", "0510"
+  transactionCodeDesc        string  human description, e.g. "Transferencia entre cuentas propias"
+  operationType              string  for administrative events only: ${OPERATION_TYPES.join(", ")}
+  transactionStatusApproval  string  workflow state: ${APPROVAL_STATUSES.join(", ")}
+
+AMOUNTS — Colombian pesos (COP), NOT minor units / cents:
+  transactionValule  number  COP amount. Non-zero ONLY when transactionType="Monetaria".
+                             IMPORTANT: the field name has a typo ("Valule" not "Value").
+                             Use this field for ALL monetary aggregations.
+  localAmount        number  identical to transactionValule for COP transactions; a display
+                             copy only — always aggregate transactionValule.
+  Example: transactionValule 2500000 means COP $2,500,000 (two and a half million pesos).
+
+DATE AND TIME:
+  timestamp        Date    BSON UTC Date at midnight of the transaction day (derived from
+                           the three integer fields). USE THIS for all date-range queries
+                           with $$NOW, $dateTrunc, or Extended JSON dates.
+  initialYearTrx   number  4-digit year, e.g. 2026
+  initialMonthTrx  number  month 1–12
+  initialDayTrx    number  day 1–31
+  initialTrxHour   string  8-char time string "HHmmssSS". First 2 chars = hour (00–23).
+                           E.g. "02300000" = 02:30 AM, "09150312" = 09:15 AM.
+
+PRODUCT FIELDS:
+  originProductNumber   string  account number the transaction was executed FROM
+  originProductType     string  one of: ${PRODUCT_TYPES.join(", ")}
+  destinyProductNumber  string  destination account number
+  destinyProductType    string  same enum as originProductType
+  destinyProductRelation  string  one of: ${DESTINY_PRODUCT_RELATIONS.join(", ")}
+
+SECURITY AND CONTROL:
+  entitlementPrivilege  string  one of: ${ENTITLEMENT_PRIVILEGES.join(", ")}
+  entitlementRol        string  one of: ${ENTITLEMENT_ROLES.join(", ")}
+  isD2B                 string  "SI" or "NO" (string, NOT a boolean)
+  ip                    string  originating IP address
+
+QUESTION-TO-FIELD GUIDANCE — read this before writing any pipeline:
+
+  "How much money did [person] move today / this week / this month"
+    → {customerName: <name>}, transactionType:"Monetaria", transactionState:"Exitosa"
+      For today: match all three integer fields (initialYearTrx, initialMonthTrx, initialDayTrx).
+      For month/week ranges: timestamp >= start_of_period (use $dateTrunc or Extended JSON date).
+      Sum transactionValule.
+
+  "Who made movements on my accounts in the last week"
+    → {originProductNumber: <account>}, timestamp within last 7 days.
+      Project BOTH customerName (account owner who may have acted directly) and
+      authorizedUserName (delegate who may have acted on their behalf). A transaction
+      shows two actors when authorizedUserName is present.
+
+  "What activities did [person] do yesterday / on [date]"
+    → {customerName: <name>}, date match: all three integer fields OR timestamp range.
+      Return ALL events regardless of transactionType — include No monetaria (logins,
+      queries) and Monetaria (transfers) alike.
+
+  "Who modified authorized users for payment approval"
+    → {operationType: "Modificación"} and/or transactionCodeDesc containing "usuario autorizado".
+      Return customerName (who performed the action), authorizedUserName (whose access was
+      changed), and the date fields.
+
+  "Which user made the largest transfer this month"
+    → {transactionType:"Monetaria", transactionState:"Exitosa"}, timestamp within current
+      calendar month ($dateTrunc unit "month" with $$NOW).
+      Sort transactionValule descending, limit 1. Return customerName.
+
+  "Are there unusual activities in my delegate access"
+    → {authorizedUserName: {$exists: true, $ne: null}}. Flag records where:
+      substring(initialTrxHour, 0, 2) <= "05" (nighttime hours), or
+      transactionValule > 10000000 (high value), or
+      ip differs from the customer's usual ip patterns.
+
+TRAPS — a wrong assumption here silently returns an empty or wrong result:
+  - "successful" = transactionState is "Exitosa". NEVER filter on a boolean or "SUCCESS" string.
+  - "monetary transfer" = transactionType is "Monetaria". Do NOT use transactionValule > 0
+    as a proxy for Monetaria.
+  - The amount field is spelled transactionValule (typo). Never use "transactionValue".
+  - Date filtering: prefer timestamp (BSON Date) for any range query. For exact-day match
+    use the three integer fields. NEVER try to parse initialTrxHour as a date.
+  - authorizedUserName is the DELEGATE; customerName is the ACCOUNT OWNER. When a delegate
+    transacted, BOTH are present on the same record. "Who made movements" must return both.
+  - There is NO userId field. Use documentNumber or customerName to identify the account holder.
+  - isD2B stores strings "SI" / "NO", not booleans.
+  - Optional fields (authorizedUserName, transactionValule, etc.) may be absent on some
+    records. Use {$exists: true, $ne: null} guards when filtering on optional fields.
+  - timestamp is UTC midnight. For time-of-day analysis, use initialTrxHour (string).`;
 
 /**
  * Return a plain-language description of the target collection for the query
@@ -100,9 +198,8 @@ Guidance for pipelines:
  * their own data without editing this file first.
  */
 export function describeCollection(name: string): string {
-  if (name === "activity_events") return ACTIVITY_EVENTS_DESCRIPTION;
+  if (name === "galatea-central-repository") return GCR_DESCRIPTION;
   // Falling through to this generic note means the model is guessing at your
-  // fields. It usually still answers, which is exactly why this is easy to miss.
-  // Register your collection above, following the checklist at the top.
+  // fields. Register your collection above, following the checklist at the top.
   return `Collection: ${name}\n(No schema description registered. Infer fields and types from the question; prefer a conservative read-only pipeline.)`;
 }

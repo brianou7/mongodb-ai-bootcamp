@@ -1,57 +1,235 @@
-import {
-  ACTION_TYPES,
-  CHANNELS,
-  STATUSES,
-  MONETARY_ACTIONS,
-  type ActionType,
-  type Channel,
-  type Status,
-} from "../../src/query/schema";
-
 /**
- * Synthetic, internally consistent operational events.
+ * Synthetic, deterministic RCC (Repositorio Central de Comportamiento) events
+ * for the galatea-central-repository collection.
  *
- * Deterministic: a fixed seed produces the same dataset every run, so the
- * verify script can assert exact answers. The generator also injects a few
- * anchor events (a clear "largest transfer this month", a larger transfer LAST
- * month so the month filter actually matters, and a dual-control violation for
- * the hybrid demo) and then ASSERTS its own internal consistency before
- * returning. If an assertion fails, the data is wrong and load must not proceed.
+ * A fixed seed produces an identical 500-document dataset on every run.
+ * 13 anchor records seed the 6 verifiable facts from data/mock-input/collection.md.
+ * Internal consistency is asserted before returning; a failed assert aborts the load.
  *
- * All values are synthetic. Amounts are in MINOR UNITS (cents).
+ * All values are synthetic. Amounts are COP pesos (NOT minor units / cents).
  */
 
-export interface ActivityEvent {
+import {
+  CHANNELS,
+  TRANSACTION_TYPES,
+  TRANSACTION_STATES,
+  DOCUMENT_TYPES,
+  PRODUCT_TYPES,
+  DESTINY_PRODUCT_RELATIONS,
+  AUTHENTICATION_TYPES,
+  ENTITLEMENT_ROLES,
+  ENTITLEMENT_PRIVILEGES,
+  OPERATION_TYPES,
+  APPROVAL_STATUSES,
+  MONETARY_TRANSACTION_TYPE,
+  type Channel,
+  type TransactionType,
+  type TransactionState,
+  type DocumentType,
+  type ProductType,
+  type DestinyProductRelation,
+  type AuthenticationType,
+  type EntitlementRole,
+  type EntitlementPrivilege,
+  type OperationType,
+  type ApprovalStatus,
+} from "../../src/query/schema";
+
+// ============================================================
+// Types
+// ============================================================
+
+export interface RccEvent {
+  // Required
   _id: string;
-  userId: string;
-  userName: string;
-  action: ActionType;
-  amount: number;
+  sessionId: string;
+  transactionId: string;
+  initialYearTrx: number;
+  initialMonthTrx: number;
+  initialDayTrx: number;
+  initialTrxHour: string;
+  finalTrxYear: number;
+  finalTrxMonth: number;
+  finalTrxDay: number;
+  finalTrxHour: string;
+  transactionCode: string;
+  transactionCodeDesc: string;
+  responseCode: string;
+  responseCodeDesc: string;
+  technicalCode: string;
   channel: Channel;
-  status: Status;
+  deviceNameId: string;
+  ip: string;
+  transactionType: TransactionType;
+  transactionState: TransactionState;
+  documentTypeCode: string;
+  documentType: DocumentType;
+  documentNumber: string;
+  excludeITC: boolean;
+  isD2B: "SI" | "NO";
+  /** UTC midnight of the transaction date; derived from the three integer fields. */
   timestamp: Date;
+
+  // Optional
+  authenticationType?: AuthenticationType;
+  currency?: string;
+  localAmount?: number;
+  internationalAmount?: number;
+  establishmentUniqueCode?: number;
+  cardNumber?: string;
+  originProductType?: ProductType;
+  originProductNumber?: string;
+  destinyProductType?: ProductType;
+  destinyProductNumber?: string;
+  destinyProductRelation?: DestinyProductRelation;
+  transactionMode?: TransactionMode;
+  transactionVoucherNumber?: number;
+  destinyBankCode?: string;
+  originBankCode?: string;
+  agreementCode?: number;
+  reference?: string;
+  inputTransactionMode?: string;
+  commission?: "SI" | "NO";
+  transactionValule?: number;
+  throwbackId?: number;
+  latitude?: string;
+  length?: string;
+  customerName?: string;
+  authorizedUserdocumentTypeCode?: string;
+  authorizedUserdocumentType?: DocumentType;
+  authorizedUserdocumentNumber?: string;
+  authorizedUserName?: string;
+  brandModel?: string;
+  osVersion?: string;
+  browser?: string;
+  mobileOperator?: string;
+  appVersion?: string;
+  sharedKey?: string;
+  agreementTermsConditions?: "SI" | "NO";
+  versionTermsConditions?: string;
+  agreementTermsConditionsDate?: number;
+  token?: number;
+  changeRate?: number;
+  totalBatchRecords?: number;
+  value4?: number;
+  value5?: number;
+  value6?: number;
+  serialToken?: string;
+  entitlement?: string;
+  batchName?: string;
+  loadMechanism?: string;
+  paymentType?: string;
+  transactionGroup?: string;
+  targetCurrency?: string;
+  field9?: string;
+  transactionStatusApproval?: ApprovalStatus;
+  managementDescription?: string;
+  transactionTracker?: string;
+  descriptionFunctions?: string;
+  customizingProductName?: string;
+  beneficiaryDocumentType?: string;
+  beneficiaryDocumentNumber?: string;
+  beneficiaryName?: string;
+  operationType?: OperationType;
+  originProductDesc?: string;
+  destinationProductDesc?: string;
+  destinationBankName?: string;
+  originBankName?: string;
+  transactionDesc?: string;
+  authenticationTransaction?: AuthenticationType;
+  entitlementRol?: EntitlementRole;
+  entitlementPrivilege?: EntitlementPrivilege;
+
+  // Advanced financial fields
+  factor?: number;
+  bankCharges?: string;
+  bankChargesValue?: number;
+  VATBankCharges?: number;
+  totalAmountDebited?: number;
+  originatingBankCode2?: string;
+  destinationBankCode2?: string;
+  customTransactionMessage?: string;
+  reasonTransaction?: string;
+  typeEntity?: string;
+  depositNumber?: string;
+  administratorId?: string;
+  exchangeNumerals?: string;
+  taxCompliance?: string;
+  customsInformation?: "SI" | "NO";
+  customsDocumentNumber?: string;
+  originBankCountry?: string;
+  beneficiaryBankCountry?: string;
+  originBankCodeType?: string;
+  originBankCode2Type?: string;
+  beneficiaryBankCodeType?: string;
+  beneficiaryBankCode2Type?: string;
+  originOwnershipType?: string;
+  beneficiaryOwnershipType?: string;
+  countryResidenceBeneficiary?: string;
+  countryResidenceOrigin?: string;
+  originCity?: string;
+  beneficiaryCity?: string;
+  originAddres?: string;
+  beneficiaryAddres?: string;
 }
 
-const USERS = [
-  { userId: "user_01", userName: "Priya Nair" },
-  { userId: "user_02", userName: "Marcus Feld" },
-  { userId: "user_03", userName: "Sofia Reyes" },
-  { userId: "user_04", userName: "Daniel Okoro" },
-  { userId: "user_05", userName: "Hana Kim" },
-] as const;
+// TransactionMode is used inside RccEvent but imported lazily; re-export its type.
+type TransactionMode = (typeof import("../../src/query/schema").TRANSACTION_MODES)[number];
+
+// ============================================================
+// Constants
+// ============================================================
 
 const SEED = 424242;
-const FILLER_COUNT = 55;
+/** 487 filler + 13 anchors = 500 total events. */
+const FILLER_COUNT = 487;
 const DAY_MS = 86_400_000;
 
-/** The anchor "largest transfer this month" amount (25,000.00). Unique max. */
-const LARGEST_THIS_MONTH = 2_500_000;
-/** A larger transfer dated last month, to prove the "this month" filter works. */
-const LARGER_LAST_MONTH = 3_000_000;
-/** Filler monetary amounts stay well below the anchor so it stays the max. */
-const FILLER_MONETARY_MAX = 900_000;
+/** Anchor amounts in COP pesos. All below ANA_SECOND_MONTH so the ranking holds. */
+const ANCHOR_AMOUNTS = {
+  PEDRO_TODAY_1: 2_500_000,
+  PEDRO_TODAY_2: 1_800_000,
+  PEDRO_YEST_TRANSFER: 850_000,
+  PEDRO_2DAYS_TRANSFER: 600_000,
+  JUAN_LARGEST_MONTH: 45_000_000,
+  ANA_SECOND_MONTH: 38_000_000,
+  JUAN_LAST_MONTH: 50_000_000,
+  CARLOS_DUAL: 18_500_000,
+} as const;
 
-/** Small deterministic PRNG (mulberry32). */
+/** All filler monetary amounts stay below 8 M to preserve the month ranking. */
+const FILLER_MONETARY_MAX = 8_000_000;
+
+// ============================================================
+// Anchor identities
+// ============================================================
+
+const PEDRO_DOC = "79456123";
+const PEDRO_NAME = "Pedro Picapiedra";
+const PEDRO_ACCOUNT = "51134450001";
+const PEDRO_ACC_TYPE: ProductType = "CUENTA_DE_AHORRO";
+const PEDRO_IP = "181.60.14.137";
+
+const JUAN_DOC = "1045678902";
+const JUAN_NAME = "Juan Garcia Restrepo";
+const JUAN_ACCOUNT = "25678912345";
+const JUAN_ACC_TYPE: ProductType = "CUENTA_CORRIENTES";
+const JUAN_IP = "10.30.45.210";
+
+const ANA_DOC = "1023456789";
+const ANA_NAME = "Ana Gutierrez Lopez";
+const ANA_ACCOUNT = "68432156789";
+const ANA_ACC_TYPE: ProductType = "CUENTA_DE_AHORRO";
+const ANA_IP = "10.30.45.211";
+
+const CARLOS_DOC = "1098765432";
+const CARLOS_NAME = "Carlos Bedoya Martinez";
+const CARLOS_UNUSUAL_IP = "200.118.47.220";
+
+// ============================================================
+// PRNG and helpers
+// ============================================================
+
 function mulberry32(seed: number): () => number {
   let s = seed;
   return () => {
@@ -69,171 +247,716 @@ function pick<T>(rng: () => number, arr: readonly T[]): T {
   return item;
 }
 
+function pad2(n: number): string {
+  return String(n).padStart(2, "0");
+}
+
+function toHourStr(h: number, m: number, s: number, cs: number): string {
+  return `${pad2(h)}${pad2(m)}${pad2(s)}${pad2(cs)}`;
+}
+
+function addCentiseconds(base: string, extra: number): string {
+  const h = parseInt(base.slice(0, 2));
+  const m = parseInt(base.slice(2, 4));
+  const s = parseInt(base.slice(4, 6));
+  const cs = parseInt(base.slice(6, 8)) + extra;
+  return toHourStr(h, m, (s + Math.floor(cs / 100)) % 60, cs % 100);
+}
+
+function pseudoHex(rng: () => number, len: number): string {
+  let result = "";
+  for (let i = 0; i < len; i++) {
+    result += Math.floor(rng() * 16).toString(16);
+  }
+  return result;
+}
+
+function pseudoUuid(rng: () => number): string {
+  return `${pseudoHex(rng, 8)}-${pseudoHex(rng, 4)}-${pseudoHex(rng, 4)}-${pseudoHex(rng, 4)}-${pseudoHex(rng, 12)}`;
+}
+
+function makeTimestamp(year: number, month: number, day: number): Date {
+  return new Date(Date.UTC(year, month - 1, day));
+}
+
 function startOfMonthUTC(now: Date): number {
   return Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1);
 }
 
-/**
- * Build the full event set. Not yet id-assigned; ids are assigned after sorting
- * by timestamp so ids read chronologically.
- */
-function buildEvents(now: Date): ActivityEvent[] {
-  const rng = mulberry32(SEED);
-  const startOfMonth = startOfMonthUTC(now);
-  const events: Array<Omit<ActivityEvent, "_id">> = [];
+function dateFromOffset(now: Date, daysBack: number): { year: number; month: number; day: number } {
+  const d = new Date(now.getTime() - daysBack * DAY_MS);
+  return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, day: d.getUTCDate() };
+}
 
-  // Filler events across the last 45 days.
-  for (let i = 0; i < FILLER_COUNT; i++) {
-    const user = pick(rng, USERS);
-    const action = pick(rng, ACTION_TYPES);
-    const isMoney = MONETARY_ACTIONS.has(action);
-    const amount = isMoney ? Math.floor(rng() * FILLER_MONETARY_MAX) : 0;
-    const timestamp = new Date(now.getTime() - Math.floor(rng() * 45) * DAY_MS - Math.floor(rng() * DAY_MS));
-    events.push({
-      userId: user.userId,
-      userName: user.userName,
-      action,
-      amount,
-      channel: pick(rng, CHANNELS),
-      status: pick(rng, STATUSES),
-      timestamp,
-    });
+/** Clamp a past date to stay within the current calendar month. */
+function clampToThisMonth(now: Date, daysBack: number): { year: number; month: number; day: number } {
+  const som = startOfMonthUTC(now);
+  const raw = now.getTime() - daysBack * DAY_MS;
+  const d = new Date(Math.max(som + DAY_MS, raw));
+  return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, day: d.getUTCDate() };
+}
+
+// ============================================================
+// Customer catalog for filler
+// ============================================================
+
+interface CustomerEntry {
+  documentNumber: string;
+  documentType: DocumentType;
+  customerName: string;
+  account: string;
+  accType: ProductType;
+}
+
+const CUSTOMERS: readonly CustomerEntry[] = [
+  { documentNumber: PEDRO_DOC, documentType: "CC", customerName: PEDRO_NAME, account: PEDRO_ACCOUNT, accType: PEDRO_ACC_TYPE },
+  { documentNumber: JUAN_DOC, documentType: "CC", customerName: JUAN_NAME, account: JUAN_ACCOUNT, accType: JUAN_ACC_TYPE },
+  { documentNumber: ANA_DOC, documentType: "CC", customerName: ANA_NAME, account: ANA_ACCOUNT, accType: ANA_ACC_TYPE },
+  { documentNumber: "1056789234", documentType: "CC", customerName: "Maria Rodriguez Silva", account: "41238965400", accType: "CUENTA_DE_AHORRO" },
+  { documentNumber: "1078902345", documentType: "CC", customerName: "Carlos Mora Ramirez", account: "93456172000", accType: "CUENTA_CORRIENTES" },
+  { documentNumber: "1034567890", documentType: "CC", customerName: "Laura Ospina Castro", account: "72345689100", accType: "CUENTA_DE_AHORRO" },
+  { documentNumber: "900123456", documentType: "NIT", customerName: "Empresa XYZ Colombia SAS", account: "88712345678", accType: "CUENTA_CORRIENTES" },
+  { documentNumber: "1067890123", documentType: "CC", customerName: "Andres Jimenez Vargas", account: "55893467200", accType: "CUENTA_DE_AHORRO" },
+];
+
+// Transaction code catalog
+interface TxEntry { code: string; desc: string }
+
+const TX_CODES: Record<TransactionType, TxEntry[]> = {
+  "Monetaria": [
+    { code: "0320", desc: "Transferencia entre cuentas propias cuenta de ahorros" },
+    { code: "0380", desc: "Transferencia nacional a terceros cuenta de ahorros" },
+    { code: "0381", desc: "Transferencia nacional a terceros cuenta corriente" },
+    { code: "0400", desc: "Pago de facturas y servicios" },
+    { code: "0401", desc: "Pago de tarjeta de crédito" },
+  ],
+  "No monetaria": [
+    { code: "0100", desc: "Consulta de saldo cuenta de ahorros" },
+    { code: "0101", desc: "Consulta de saldo tarjeta de crédito" },
+    { code: "0110", desc: "Consulta de extracto cuenta corriente" },
+    { code: "0120", desc: "Inicio de sesión canal digital" },
+    { code: "0130", desc: "Cierre de sesión canal digital" },
+  ],
+  "Administrativa": [
+    { code: "0511", desc: "Inscripción de producto destino" },
+    { code: "0520", desc: "Modificación de datos del perfil de usuario" },
+    { code: "0521", desc: "Modificación límites de transacción" },
+  ],
+};
+
+const APP_DEVICES: readonly { brand: string; os: string }[] = [
+  { brand: "iPhone", os: "iOS" },
+  { brand: "Samsung Galaxy", os: "Android" },
+  { brand: "Huawei P40", os: "Android" },
+  { brand: "Motorola Edge", os: "Android" },
+];
+
+const APP_VERSIONS = ["25.1.0", "25.2.0", "25.3.0", "24.8.1"] as const;
+
+// ============================================================
+// Filler builder
+// ============================================================
+
+function buildFillerRecord(rng: () => number, now: Date): Omit<RccEvent, "_id"> {
+  const customer = pick(rng, CUSTOMERS);
+  const txType: TransactionType = pick(rng, [
+    "Monetaria", "Monetaria", "Monetaria",
+    "No monetaria", "No monetaria",
+    "Administrativa",
+  ] as const);
+  const state: TransactionState = pick(rng, [
+    "Exitosa", "Exitosa", "Exitosa", "Exitosa", "Exitosa", "Exitosa", "Exitosa",
+    "No exitosa", "No exitosa",
+    "Técnicamente exitosa",
+  ] as const);
+  const txEntry = pick(rng, TX_CODES[txType]);
+  const channel: Channel = pick(rng, CHANNELS);
+  const daysBack = Math.floor(rng() * 89) + 1;
+  const { year, month, day } = dateFromOffset(now, daysBack);
+  const initH = 8 + Math.floor(rng() * 10);
+  const initM = Math.floor(rng() * 60);
+  const initS = Math.floor(rng() * 60);
+  const initCS = Math.floor(rng() * 100);
+  const initHour = toHourStr(initH, initM, initS, initCS);
+  const finalHour = addCentiseconds(initHour, 5 + Math.floor(rng() * 60));
+  const isMoney = txType === MONETARY_TRANSACTION_TYPE;
+  const amount = isMoney && state === "Exitosa" ? 50_000 + Math.floor(rng() * FILLER_MONETARY_MAX) : 0;
+  const ip =
+    channel === "APP"
+      ? `${pick(rng, ["181.60", "190.16", "181.129"] as const)}.${Math.floor(rng() * 256)}.${Math.floor(rng() * 256)}`
+      : `10.30.${Math.floor(rng() * 256)}.${Math.floor(rng() * 256)}`;
+  const auth: AuthenticationType =
+    channel === "APP"
+      ? pick(rng, ["Biometría huella", "Biometría faceid", "Credenciales"] as const)
+      : pick(rng, ["Token", "Credenciales"] as const);
+  const respCode = state === "Exitosa" ? "000" : state === "Técnicamente exitosa" ? "703" : "701";
+  const respDesc =
+    state === "Exitosa"
+      ? "Transacción aprobada"
+      : state === "Técnicamente exitosa"
+        ? "Transacción procesada con advertencias técnicas"
+        : pick(rng, ["Error procesando la transacción", "Transacción rechazada por límites", "Error de validación de datos"] as const);
+  const techCode = state === "Exitosa" ? "BP00000000" : pick(rng, ["BP12900037", "BP22000001", "BP45600123"] as const);
+  const isTransfer = isMoney && txEntry.code.startsWith("03");
+
+  const rec: Omit<RccEvent, "_id"> = {
+    sessionId: pseudoUuid(rng),
+    transactionId: pseudoUuid(rng),
+    initialYearTrx: year,
+    initialMonthTrx: month,
+    initialDayTrx: day,
+    initialTrxHour: initHour,
+    finalTrxYear: year,
+    finalTrxMonth: month,
+    finalTrxDay: day,
+    finalTrxHour: finalHour,
+    transactionCode: txEntry.code,
+    transactionCodeDesc: txEntry.desc,
+    responseCode: respCode,
+    responseCodeDesc: respDesc,
+    technicalCode: techCode,
+    channel,
+    deviceNameId: channel === "APP" ? "Dispositivo móvil" : channel,
+    ip,
+    authenticationType: auth,
+    transactionType: txType,
+    transactionState: state,
+    documentTypeCode: "TIPDOC_FS001",
+    documentType: customer.documentType,
+    documentNumber: customer.documentNumber,
+    customerName: customer.customerName,
+    transactionMode: "Virtual",
+    excludeITC: state !== "Exitosa",
+    isD2B: "SI",
+    timestamp: makeTimestamp(year, month, day),
+    authenticationTransaction: auth,
+    transactionDesc: txEntry.desc,
+  };
+
+  if (isMoney) {
+    rec.currency = "COP";
+    rec.localAmount = amount;
+    rec.transactionValule = amount;
+    rec.originProductType = customer.accType;
+    rec.originProductNumber = customer.account;
+  }
+  if (isTransfer) {
+    rec.destinyProductType = pick(rng, PRODUCT_TYPES);
+    rec.destinyProductNumber = pseudoHex(rng, 11);
+    rec.destinyProductRelation = pick(rng, DESTINY_PRODUCT_RELATIONS);
+    rec.destinyBankCode = "5600078";
+    rec.originBankCode = "5600078";
+  }
+  if (isMoney && state === "Exitosa") {
+    rec.transactionVoucherNumber = 100_000 + Math.floor(rng() * 900_000);
+    rec.commission = "NO";
+    rec.entitlementRol = pick(rng, ENTITLEMENT_ROLES);
+    rec.entitlementPrivilege = channel === "APP" ? "Admon Autonomo" : pick(rng, ENTITLEMENT_PRIVILEGES);
+  }
+  if (txType === "Administrativa") {
+    rec.operationType = pick(rng, OPERATION_TYPES);
+  }
+  if (channel === "APP") {
+    const dev = pick(rng, APP_DEVICES);
+    rec.brandModel = dev.brand;
+    rec.osVersion = dev.os;
+    rec.appVersion = pick(rng, APP_VERSIONS);
   }
 
-  // Anchor 1: the largest transfer THIS month (successful). Dated within this
-  // month and no later than now. Clamped so it stays inside the month window.
-  const thisMonthTs = new Date(Math.max(startOfMonth + 3600_000, now.getTime() - 2 * DAY_MS));
-  const priya = USERS[0];
-  events.push({
-    userId: priya.userId,
-    userName: priya.userName,
-    action: "TRANSFER_APPROVED",
-    amount: LARGEST_THIS_MONTH,
-    channel: "BRANCH",
-    status: "SUCCESS",
-    timestamp: thisMonthTs,
-  });
-
-  // Anchor 2: a larger transfer dated LAST month (so "this month" filtering matters).
-  const lastMonthTs = new Date(startOfMonth - 5 * DAY_MS);
-  const marcus = USERS[1];
-  events.push({
-    userId: marcus.userId,
-    userName: marcus.userName,
-    action: "TRANSFER_APPROVED",
-    amount: LARGER_LAST_MONTH,
-    channel: "BRANCH",
-    status: "SUCCESS",
-    timestamp: lastMonthTs,
-  });
-
-  // Anchor 3: a dual-control VIOLATION for the hybrid demo. Sofia both initiates
-  // and approves the same high-value transfer (>= 1,000,000 minor units).
-  const sofia = USERS[2];
-  const violationAmount = 1_800_000;
-  const violationInitTs = new Date(Math.max(startOfMonth + 3600_000, now.getTime() - 6 * DAY_MS));
-  events.push({
-    userId: sofia.userId,
-    userName: sofia.userName,
-    action: "TRANSFER_INITIATED",
-    amount: violationAmount,
-    channel: "API",
-    status: "SUCCESS",
-    timestamp: violationInitTs,
-  });
-  events.push({
-    userId: sofia.userId,
-    userName: sofia.userName,
-    action: "TRANSFER_APPROVED",
-    amount: violationAmount,
-    channel: "API",
-    status: "SUCCESS",
-    timestamp: new Date(violationInitTs.getTime() + 60_000),
-  });
-
-  // Sort chronologically and assign stable ids.
-  events.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
-  return events.map((e, i) => ({ _id: `evt_${String(i + 1).padStart(4, "0")}`, ...e }));
+  return rec;
 }
+
+// ============================================================
+// Anchor builders — one function per verifiable fact group
+// ============================================================
+
+/** Fact 1: Pedro moves $4,300,000 today (2 monetary transfers + 1 non-monetary query). */
+function anchorsToday(now: Date): Array<Omit<RccEvent, "_id">> {
+  const { year, month, day } = dateFromOffset(now, 0);
+  const ts = makeTimestamp(year, month, day);
+  const base = {
+    finalTrxYear: year, finalTrxMonth: month, finalTrxDay: day,
+    responseCode: "000", responseCodeDesc: "Transacción aprobada",
+    technicalCode: "BP00000000", channel: "APP" as const,
+    deviceNameId: "Dispositivo móvil", ip: PEDRO_IP,
+    documentTypeCode: "TIPDOC_FS001", documentType: "CC" as const,
+    documentNumber: PEDRO_DOC, customerName: PEDRO_NAME,
+    transactionMode: "Virtual" as const, excludeITC: false, isD2B: "SI" as const,
+    timestamp: ts, authenticationType: "Biometría huella" as const,
+    authenticationTransaction: "Biometría huella" as const,
+    entitlementRol: "Titular" as const, entitlementPrivilege: "Admon Autonomo" as const,
+    currency: "COP", originProductType: PEDRO_ACC_TYPE, originProductNumber: PEDRO_ACCOUNT,
+  };
+  return [
+    {
+      ...base,
+      sessionId: "f6127e10-f3e9-11ed-4d8e-438c4c9f4da1",
+      transactionId: "20e34c70-66f2-11ee-43a5-478c42000101",
+      initialYearTrx: year, initialMonthTrx: month, initialDayTrx: day,
+      initialTrxHour: "09150000", finalTrxHour: "09150312",
+      transactionCode: "0320", transactionCodeDesc: "Transferencia entre cuentas propias cuenta de ahorros",
+      transactionType: "Monetaria", transactionState: "Exitosa",
+      localAmount: ANCHOR_AMOUNTS.PEDRO_TODAY_1, transactionValule: ANCHOR_AMOUNTS.PEDRO_TODAY_1,
+      destinyProductType: "CUENTA_DE_AHORRO" as const, destinyProductNumber: "31189907865",
+      destinyProductRelation: "Propia" as const, commission: "NO" as const,
+      transactionVoucherNumber: 724428,
+      transactionDesc: "Transferencia a cuenta propia de ahorros",
+    },
+    {
+      ...base,
+      sessionId: "f6127e10-f3e9-11ed-4d8e-438c4c9f4da2",
+      transactionId: "20e34c70-66f2-11ee-43a5-478c42000102",
+      initialYearTrx: year, initialMonthTrx: month, initialDayTrx: day,
+      initialTrxHour: "11420000", finalTrxHour: "11420521",
+      transactionCode: "0380", transactionCodeDesc: "Transferencia nacional a terceros cuenta de ahorros",
+      transactionType: "Monetaria", transactionState: "Exitosa",
+      localAmount: ANCHOR_AMOUNTS.PEDRO_TODAY_2, transactionValule: ANCHOR_AMOUNTS.PEDRO_TODAY_2,
+      destinyProductType: "CUENTA_DE_AHORRO" as const, destinyProductNumber: "98765000123",
+      destinyProductRelation: "Inscrita" as const, commission: "NO" as const,
+      transactionVoucherNumber: 819345,
+      beneficiaryName: "Maria Londoño Uribe", beneficiaryDocumentType: "CC",
+      beneficiaryDocumentNumber: "1002346789",
+      transactionDesc: "Transferencia a cuenta inscrita de tercero",
+    },
+    {
+      ...base,
+      sessionId: "f6127e10-f3e9-11ed-4d8e-438c4c9f4da3",
+      transactionId: "20e34c70-66f2-11ee-43a5-478c42000103",
+      initialYearTrx: year, initialMonthTrx: month, initialDayTrx: day,
+      initialTrxHour: "08350000", finalTrxHour: "08350152",
+      transactionCode: "0100", transactionCodeDesc: "Consulta de saldo cuenta de ahorros",
+      transactionType: "No monetaria", transactionState: "Exitosa",
+      excludeITC: true, // non-monetary, no ITC replica needed
+      transactionDesc: "Consulta de saldo cuenta de ahorros",
+    },
+  ];
+}
+
+/** Fact 3 (partial): Pedro had 3 activities yesterday. */
+function anchorsYesterday(now: Date): Array<Omit<RccEvent, "_id">> {
+  const { year, month, day } = dateFromOffset(now, 1);
+  const ts = makeTimestamp(year, month, day);
+  const base = {
+    finalTrxYear: year, finalTrxMonth: month, finalTrxDay: day,
+    responseCode: "000", responseCodeDesc: "Transacción aprobada",
+    technicalCode: "BP00000000", channel: "APP" as const,
+    deviceNameId: "Dispositivo móvil", ip: PEDRO_IP,
+    documentTypeCode: "TIPDOC_FS001", documentType: "CC" as const,
+    documentNumber: PEDRO_DOC, customerName: PEDRO_NAME,
+    transactionMode: "Virtual" as const, isD2B: "SI" as const,
+    timestamp: ts, authenticationType: "Biometría huella" as const,
+    authenticationTransaction: "Biometría huella" as const,
+    brandModel: "iPhone", osVersion: "iOS", appVersion: "25.1.0",
+  };
+  return [
+    {
+      ...base,
+      sessionId: "f6127e10-f3e9-11ed-4d8e-438c4c9f4db1",
+      transactionId: "20e34c70-66f2-11ee-43a5-478c42000201",
+      initialYearTrx: year, initialMonthTrx: month, initialDayTrx: day,
+      initialTrxHour: "08280000", finalTrxHour: "08280152",
+      transactionCode: "0120", transactionCodeDesc: "Inicio de sesión canal digital",
+      transactionType: "No monetaria", transactionState: "Exitosa",
+      excludeITC: true, transactionDesc: "Inicio de sesión canal digital",
+    },
+    {
+      ...base,
+      sessionId: "f6127e10-f3e9-11ed-4d8e-438c4c9f4db2",
+      transactionId: "20e34c70-66f2-11ee-43a5-478c42000202",
+      initialYearTrx: year, initialMonthTrx: month, initialDayTrx: day,
+      initialTrxHour: "08350000", finalTrxHour: "08350210",
+      transactionCode: "0101", transactionCodeDesc: "Consulta de saldo tarjeta de crédito",
+      transactionType: "No monetaria", transactionState: "Exitosa",
+      excludeITC: true, transactionDesc: "Consulta de saldo tarjeta de crédito",
+    },
+    {
+      ...base,
+      sessionId: "f6127e10-f3e9-11ed-4d8e-438c4c9f4db3",
+      transactionId: "20e34c70-66f2-11ee-43a5-478c42000203",
+      initialYearTrx: year, initialMonthTrx: month, initialDayTrx: day,
+      initialTrxHour: "09150000", finalTrxHour: "09150445",
+      transactionCode: "0380", transactionCodeDesc: "Transferencia nacional a terceros cuenta de ahorros",
+      transactionType: "Monetaria", transactionState: "Exitosa",
+      excludeITC: false,
+      currency: "COP", localAmount: ANCHOR_AMOUNTS.PEDRO_YEST_TRANSFER,
+      transactionValule: ANCHOR_AMOUNTS.PEDRO_YEST_TRANSFER,
+      originProductType: PEDRO_ACC_TYPE, originProductNumber: PEDRO_ACCOUNT,
+      destinyProductType: "CUENTA_DE_AHORRO" as const, destinyProductNumber: "12345678901",
+      destinyProductRelation: "Inscrita" as const, commission: "NO" as const,
+      transactionVoucherNumber: 531224,
+      entitlementRol: "Titular" as const, entitlementPrivilege: "Admon Autonomo" as const,
+      transactionDesc: "Transferencia a cuenta inscrita de tercero",
+    },
+  ];
+}
+
+/** Fact 3 (date-filter anchor): Pedro had a transfer the day before yesterday so
+ *  a "yesterday" filter returns exactly yesterday's 3 events, not this one. */
+function anchorDayBefore(now: Date): Omit<RccEvent, "_id"> {
+  const { year, month, day } = dateFromOffset(now, 2);
+  return {
+    sessionId: "f6127e10-f3e9-11ed-4d8e-438c4c9f4dc1",
+    transactionId: "20e34c70-66f2-11ee-43a5-478c42000301",
+    initialYearTrx: year, initialMonthTrx: month, initialDayTrx: day,
+    initialTrxHour: "14200000", finalTrxHour: "14200530",
+    finalTrxYear: year, finalTrxMonth: month, finalTrxDay: day,
+    transactionCode: "0380", transactionCodeDesc: "Transferencia nacional a terceros cuenta de ahorros",
+    responseCode: "000", responseCodeDesc: "Transacción aprobada",
+    technicalCode: "BP00000000", channel: "APP",
+    deviceNameId: "Dispositivo móvil", ip: PEDRO_IP,
+    authenticationType: "Biometría faceid", transactionType: "Monetaria",
+    transactionState: "Exitosa", documentTypeCode: "TIPDOC_FS001",
+    documentType: "CC", documentNumber: PEDRO_DOC, customerName: PEDRO_NAME,
+    currency: "COP", localAmount: ANCHOR_AMOUNTS.PEDRO_2DAYS_TRANSFER,
+    transactionValule: ANCHOR_AMOUNTS.PEDRO_2DAYS_TRANSFER,
+    originProductType: PEDRO_ACC_TYPE, originProductNumber: PEDRO_ACCOUNT,
+    destinyProductType: "CUENTA_DE_AHORRO", destinyProductNumber: "99887766554",
+    destinyProductRelation: "Inscrita", transactionMode: "Virtual",
+    transactionVoucherNumber: 634512, commission: "NO",
+    excludeITC: false, isD2B: "SI",
+    timestamp: makeTimestamp(year, month, day),
+    authenticationTransaction: "Biometría faceid",
+    entitlementRol: "Titular", entitlementPrivilege: "Admon Autonomo",
+    transactionDesc: "Transferencia a cuenta inscrita",
+    brandModel: "iPhone", osVersion: "iOS", appVersion: "25.1.0",
+  };
+}
+
+/** Fact 4: Pedro modified Carlos as authorized user for payment approval — 4 days ago. */
+function anchorUserModification(now: Date): Omit<RccEvent, "_id"> {
+  const { year, month, day } = dateFromOffset(now, 4);
+  return {
+    sessionId: "f6127e10-f3e9-11ed-4d8e-438c4c9f4dd1",
+    transactionId: "20e34c70-66f2-11ee-43a5-478c42000401",
+    initialYearTrx: year, initialMonthTrx: month, initialDayTrx: day,
+    initialTrxHour: "11450000", finalTrxHour: "11451230",
+    finalTrxYear: year, finalTrxMonth: month, finalTrxDay: day,
+    transactionCode: "0510",
+    transactionCodeDesc: "Modificación usuario autorizado para aprobación de pagos",
+    responseCode: "000", responseCodeDesc: "Modificación exitosa",
+    technicalCode: "BP00000000", channel: "NEG",
+    deviceNameId: "NEG", ip: "10.30.45.210",
+    transactionType: "No monetaria", transactionState: "Exitosa",
+    documentTypeCode: "TIPDOC_FS001", documentType: "CC",
+    documentNumber: PEDRO_DOC, customerName: PEDRO_NAME,
+    authorizedUserdocumentTypeCode: "TIPDOC_FS001",
+    authorizedUserdocumentType: "CC",
+    authorizedUserdocumentNumber: CARLOS_DOC,
+    authorizedUserName: CARLOS_NAME,
+    operationType: "Modificación", transactionMode: "Virtual",
+    excludeITC: true, isD2B: "SI",
+    timestamp: makeTimestamp(year, month, day),
+    entitlementRol: "Titular", entitlementPrivilege: "Admon Autonomo",
+    transactionDesc: "Modificación de permisos del usuario delegado para autorización de pagos",
+  };
+}
+
+/** Fact 5a: Juan's $45M transfer — largest this month. */
+function anchorJuanLargest(now: Date): Omit<RccEvent, "_id"> {
+  const { year, month, day } = clampToThisMonth(now, 8);
+  return {
+    sessionId: "f6127e10-f3e9-11ed-4d8e-438c4c9f4de1",
+    transactionId: "20e34c70-66f2-11ee-43a5-478c42000501",
+    initialYearTrx: year, initialMonthTrx: month, initialDayTrx: day,
+    initialTrxHour: "14220000", finalTrxHour: "14220845",
+    finalTrxYear: year, finalTrxMonth: month, finalTrxDay: day,
+    transactionCode: "0380",
+    transactionCodeDesc: "Transferencia nacional a terceros cuenta de ahorros",
+    responseCode: "000", responseCodeDesc: "Transacción aprobada",
+    technicalCode: "BP00000000", channel: "NEG",
+    deviceNameId: "NEG", ip: JUAN_IP,
+    authenticationType: "Token", transactionType: "Monetaria",
+    transactionState: "Exitosa", documentTypeCode: "TIPDOC_FS001",
+    documentType: "CC", documentNumber: JUAN_DOC, customerName: JUAN_NAME,
+    currency: "COP", localAmount: ANCHOR_AMOUNTS.JUAN_LARGEST_MONTH,
+    transactionValule: ANCHOR_AMOUNTS.JUAN_LARGEST_MONTH,
+    originProductType: JUAN_ACC_TYPE, originProductNumber: JUAN_ACCOUNT,
+    destinyProductType: "CUENTA_DE_AHORRO", destinyProductNumber: "68432198765",
+    destinyProductRelation: "No inscrita", transactionMode: "Virtual",
+    transactionVoucherNumber: 993201, commission: "SI",
+    destinyBankCode: "5600078", originBankCode: "5600078",
+    excludeITC: false, isD2B: "SI",
+    timestamp: makeTimestamp(year, month, day),
+    transactionStatusApproval: "Aprobado",
+    authenticationTransaction: "Token",
+    entitlementRol: "Titular", entitlementPrivilege: "Admon Autonomo",
+    transactionDesc: "Transferencia nacional a tercero no inscrito",
+  };
+}
+
+/** Fact 5b: Ana's $38M transfer — second largest this month. */
+function anchorAnaSecond(now: Date): Omit<RccEvent, "_id"> {
+  const { year, month, day } = clampToThisMonth(now, 6);
+  return {
+    sessionId: "f6127e10-f3e9-11ed-4d8e-438c4c9f4df1",
+    transactionId: "20e34c70-66f2-11ee-43a5-478c42000601",
+    initialYearTrx: year, initialMonthTrx: month, initialDayTrx: day,
+    initialTrxHour: "10300000", finalTrxHour: "10300712",
+    finalTrxYear: year, finalTrxMonth: month, finalTrxDay: day,
+    transactionCode: "0380",
+    transactionCodeDesc: "Transferencia nacional a terceros cuenta corriente",
+    responseCode: "000", responseCodeDesc: "Transacción aprobada",
+    technicalCode: "BP00000000", channel: "SVP",
+    deviceNameId: "SVP", ip: ANA_IP,
+    authenticationType: "Token", transactionType: "Monetaria",
+    transactionState: "Exitosa", documentTypeCode: "TIPDOC_FS001",
+    documentType: "CC", documentNumber: ANA_DOC, customerName: ANA_NAME,
+    currency: "COP", localAmount: ANCHOR_AMOUNTS.ANA_SECOND_MONTH,
+    transactionValule: ANCHOR_AMOUNTS.ANA_SECOND_MONTH,
+    originProductType: ANA_ACC_TYPE, originProductNumber: ANA_ACCOUNT,
+    destinyProductType: "CUENTA_CORRIENTES", destinyProductNumber: "25678900123",
+    destinyProductRelation: "Otros bancos", transactionMode: "Virtual",
+    transactionVoucherNumber: 771234, commission: "SI",
+    destinyBankCode: "9000123", originBankCode: "5600078",
+    excludeITC: false, isD2B: "SI",
+    timestamp: makeTimestamp(year, month, day),
+    transactionStatusApproval: "Aprobado",
+    authenticationTransaction: "Token",
+    entitlementRol: "Titular", entitlementPrivilege: "Admon Autonomo",
+    transactionDesc: "Transferencia a otro banco",
+  };
+}
+
+/** Fact 5c: Juan's $50M transfer LAST month — ensures "this month" filter excludes it. */
+function anchorJuanLastMonth(now: Date): Omit<RccEvent, "_id"> {
+  const som = startOfMonthUTC(now);
+  const d = new Date(som - 3 * DAY_MS);
+  const year = d.getUTCFullYear();
+  const month = d.getUTCMonth() + 1;
+  const day = d.getUTCDate();
+  return {
+    sessionId: "f6127e10-f3e9-11ed-4d8e-438c4c9f4dg1",
+    transactionId: "20e34c70-66f2-11ee-43a5-478c42000701",
+    initialYearTrx: year, initialMonthTrx: month, initialDayTrx: day,
+    initialTrxHour: "09000000", finalTrxHour: "09001050",
+    finalTrxYear: year, finalTrxMonth: month, finalTrxDay: day,
+    transactionCode: "0380",
+    transactionCodeDesc: "Transferencia nacional a terceros cuenta de ahorros",
+    responseCode: "000", responseCodeDesc: "Transacción aprobada",
+    technicalCode: "BP00000000", channel: "NEG",
+    deviceNameId: "NEG", ip: JUAN_IP,
+    authenticationType: "Token", transactionType: "Monetaria",
+    transactionState: "Exitosa", documentTypeCode: "TIPDOC_FS001",
+    documentType: "CC", documentNumber: JUAN_DOC, customerName: JUAN_NAME,
+    currency: "COP", localAmount: ANCHOR_AMOUNTS.JUAN_LAST_MONTH,
+    transactionValule: ANCHOR_AMOUNTS.JUAN_LAST_MONTH,
+    originProductType: JUAN_ACC_TYPE, originProductNumber: JUAN_ACCOUNT,
+    destinyProductType: "CUENTA_DE_AHORRO", destinyProductNumber: "55123456789",
+    destinyProductRelation: "No inscrita", transactionMode: "Virtual",
+    transactionVoucherNumber: 882901, commission: "SI",
+    destinyBankCode: "5600078", originBankCode: "5600078",
+    excludeITC: false, isD2B: "SI",
+    timestamp: makeTimestamp(year, month, day),
+    transactionStatusApproval: "Aprobado",
+    authenticationTransaction: "Token",
+    entitlementRol: "Titular", entitlementPrivilege: "Admon Autonomo",
+    transactionDesc: "Transferencia nacional — mes anterior",
+  };
+}
+
+/**
+ * Facts 2 & 6: Carlos's dual-control violation — $18.5 M at 02:30 AM, 3 days ago.
+ * A single delegate (Carlos) both prepared and approved the same transaction.
+ * Returns [initiation_record, approval_record].
+ */
+function anchorsDualControl(now: Date): [Omit<RccEvent, "_id">, Omit<RccEvent, "_id">] {
+  const { year, month, day } = dateFromOffset(now, 3);
+  const ts = makeTimestamp(year, month, day);
+  const shared = {
+    finalTrxYear: year, finalTrxMonth: month, finalTrxDay: day,
+    transactionCode: "0380",
+    transactionCodeDesc: "Transferencia nacional a terceros cuenta de ahorros",
+    responseCode: "000", responseCodeDesc: "Transacción aprobada",
+    technicalCode: "BP00000000", channel: "SVP" as const,
+    deviceNameId: "SVP", ip: CARLOS_UNUSUAL_IP,
+    authenticationType: "Token" as const, transactionType: "Monetaria" as const,
+    transactionState: "Exitosa" as const,
+    documentTypeCode: "TIPDOC_FS001", documentType: "CC" as const,
+    documentNumber: PEDRO_DOC, customerName: PEDRO_NAME,
+    authorizedUserdocumentTypeCode: "TIPDOC_FS001",
+    authorizedUserdocumentType: "CC" as const,
+    authorizedUserdocumentNumber: CARLOS_DOC,
+    authorizedUserName: CARLOS_NAME,
+    currency: "COP", localAmount: ANCHOR_AMOUNTS.CARLOS_DUAL,
+    transactionValule: ANCHOR_AMOUNTS.CARLOS_DUAL,
+    originProductType: PEDRO_ACC_TYPE, originProductNumber: PEDRO_ACCOUNT,
+    destinyProductType: "CUENTA_DE_AHORRO" as const, destinyProductNumber: "11223344556",
+    destinyProductRelation: "No inscrita" as const, transactionMode: "Virtual" as const,
+    commission: "NO" as const, excludeITC: false, isD2B: "SI" as const,
+    timestamp: ts, authenticationTransaction: "Token" as const,
+    entitlementRol: "Titular Rep Legal" as const, entitlementPrivilege: "Preparador/Aprobador" as const,
+    managementDescription: "Operación preparada y aprobada por el mismo delegado sin segunda firma",
+  };
+  const init: Omit<RccEvent, "_id"> = {
+    ...shared,
+    sessionId: "f6127e10-f3e9-11ed-4d8e-438c4c9f4dh1",
+    transactionId: "20e34c70-66f2-11ee-43a5-478c42000801",
+    initialYearTrx: year, initialMonthTrx: month, initialDayTrx: day,
+    initialTrxHour: "02300000", finalTrxHour: "02300512",
+    transactionVoucherNumber: 556781, transactionStatusApproval: "Preparado",
+    transactionDesc: "Transferencia nocturna — preparada por delegado",
+  };
+  const appr: Omit<RccEvent, "_id"> = {
+    ...shared,
+    sessionId: "f6127e10-f3e9-11ed-4d8e-438c4c9f4dh2",
+    transactionId: "20e34c70-66f2-11ee-43a5-478c42000802",
+    initialYearTrx: year, initialMonthTrx: month, initialDayTrx: day,
+    initialTrxHour: "02310000", finalTrxHour: "02310205",
+    transactionVoucherNumber: 556782, transactionStatusApproval: "Aprobado",
+    transactionDesc: "Transferencia nocturna — aprobada por el mismo delegado",
+  };
+  return [init, appr];
+}
+
+// ============================================================
+// Build full dataset
+// ============================================================
+
+function buildEvents(now: Date): RccEvent[] {
+  const rng = mulberry32(SEED);
+  const raw: Array<Omit<RccEvent, "_id">> = [];
+
+  // Filler events
+  for (let i = 0; i < FILLER_COUNT; i++) {
+    raw.push(buildFillerRecord(rng, now));
+  }
+
+  // Anchors
+  raw.push(...anchorsToday(now));
+  raw.push(...anchorsYesterday(now));
+  raw.push(anchorDayBefore(now));
+  raw.push(anchorUserModification(now));
+  raw.push(anchorJuanLargest(now));
+  raw.push(anchorAnaSecond(now));
+  raw.push(anchorJuanLastMonth(now));
+  const [dualInit, dualAppr] = anchorsDualControl(now);
+  raw.push(dualInit);
+  raw.push(dualAppr);
+
+  // Sort chronologically, then assign stable IDs.
+  raw.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+  return raw.map((e, i) => ({ _id: `rcc_${String(i + 1).padStart(5, "0")}`, ...e }));
+}
+
+// ============================================================
+// Expectations (compatible shape with scripts/verify.ts)
+// ============================================================
 
 export interface Expectations {
   totalEvents: number;
+  /** The single record with the highest transactionValule in the current calendar month. */
   largestTransferThisMonth: { _id: string; amount: number; userId: string; userName: string };
+  /** The focus customer (Pedro Picapiedra) and their total successful monetary transfers. */
   focusUser: { userId: string; userName: string; totalSuccessfulTransferMinorUnits: number };
+  /** The pair of records that represent the dual-control violation. */
   dualControlViolation: { initiatedId: string; approvedId: string; userId: string };
 }
 
-/** Sum of successful monetary transfers for a user across all data. */
-function successfulTransferTotal(events: ActivityEvent[], userId: string): number {
+/** Sum of all Monetaria+Exitosa transactionValule for a given documentNumber. */
+function successfulTransferTotal(events: RccEvent[], documentNumber: string): number {
   return events
-    .filter((e) => e.userId === userId && e.status === "SUCCESS" && MONETARY_ACTIONS.has(e.action))
-    .reduce((sum, e) => sum + e.amount, 0);
+    .filter((e) => e.documentNumber === documentNumber && e.transactionType === MONETARY_TRANSACTION_TYPE && e.transactionState === "Exitosa")
+    .reduce((sum, e) => sum + (e.transactionValule ?? 0), 0);
 }
 
-/** Derive the verifiable facts from a generated event set. */
-export function computeExpectations(events: ActivityEvent[], now: Date = new Date()): Expectations {
+export function computeExpectations(events: RccEvent[], now: Date = new Date()): Expectations {
   const startOfMonth = startOfMonthUTC(now);
 
-  const thisMonthTransfers = events.filter(
-    (e) => MONETARY_ACTIONS.has(e.action) && e.timestamp.getTime() >= startOfMonth,
+  const thisMonthMonetary = events.filter(
+    (e) => e.transactionType === MONETARY_TRANSACTION_TYPE && e.transactionState === "Exitosa" && e.timestamp.getTime() >= startOfMonth,
   );
-  let largest = thisMonthTransfers[0];
-  for (const e of thisMonthTransfers) {
-    if (!largest || e.amount > largest.amount) largest = e;
+  let largest = thisMonthMonetary[0];
+  for (const e of thisMonthMonetary) {
+    if (!largest || (e.transactionValule ?? 0) > (largest.transactionValule ?? 0)) largest = e;
   }
-  if (!largest) throw new Error("No transfers this month; generator invariant broken.");
+  if (!largest) throw new Error("No successful monetary transfers this month; generator invariant broken.");
 
-  const focus = USERS[0];
-  const init = events.find((e) => e.action === "TRANSFER_INITIATED" && e.amount === 1_800_000);
-  const appr = events.find((e) => e.action === "TRANSFER_APPROVED" && e.amount === 1_800_000);
-  if (!init || !appr) throw new Error("Dual-control violation anchor missing; generator broken.");
+  const dualInit = events.find((e) => e.transactionStatusApproval === "Preparado" && e.authorizedUserName === CARLOS_NAME && (e.transactionValule ?? 0) === ANCHOR_AMOUNTS.CARLOS_DUAL);
+  const dualAppr = events.find((e) => e.transactionStatusApproval === "Aprobado" && e.authorizedUserName === CARLOS_NAME && (e.transactionValule ?? 0) === ANCHOR_AMOUNTS.CARLOS_DUAL);
+  if (!dualInit || !dualAppr) throw new Error("Dual-control violation anchor missing; generator broken.");
 
   return {
     totalEvents: events.length,
     largestTransferThisMonth: {
       _id: largest._id,
-      amount: largest.amount,
-      userId: largest.userId,
-      userName: largest.userName,
+      amount: largest.transactionValule ?? 0,
+      userId: largest.documentNumber,
+      userName: largest.customerName ?? "",
     },
     focusUser: {
-      userId: focus.userId,
-      userName: focus.userName,
-      totalSuccessfulTransferMinorUnits: successfulTransferTotal(events, focus.userId),
+      userId: PEDRO_DOC,
+      userName: PEDRO_NAME,
+      totalSuccessfulTransferMinorUnits: successfulTransferTotal(events, PEDRO_DOC),
     },
-    dualControlViolation: { initiatedId: init._id, approvedId: appr._id, userId: init.userId },
+    dualControlViolation: {
+      initiatedId: dualInit._id,
+      approvedId: dualAppr._id,
+      userId: CARLOS_DOC,
+    },
   };
 }
 
 /**
- * Generate the synthetic events and assert internal consistency. Throws if the
- * data is not self-consistent, so callers never load bad data.
+ * Generate the synthetic events and assert internal consistency.
+ * Throws if any invariant is violated so callers never load bad data.
  */
-export function generateActivityEvents(now: Date = new Date()): ActivityEvent[] {
+export function generateActivityEvents(now: Date = new Date()): RccEvent[] {
   const events = buildEvents(now);
   const exp = computeExpectations(events, now);
 
-  // Invariant 1: the anchor really is the largest transfer this month.
-  if (exp.largestTransferThisMonth.amount !== LARGEST_THIS_MONTH) {
+  // Invariant 1: Juan's anchor is the largest transfer this month.
+  if (exp.largestTransferThisMonth.amount !== ANCHOR_AMOUNTS.JUAN_LARGEST_MONTH) {
     throw new Error(
-      `Largest transfer this month is ${exp.largestTransferThisMonth.amount}, expected ${LARGEST_THIS_MONTH}.`,
+      `Largest transfer this month is ${exp.largestTransferThisMonth.amount}, expected ${ANCHOR_AMOUNTS.JUAN_LARGEST_MONTH}. A filler record may have exceeded the cap.`,
     );
   }
 
-  // Invariant 2: per-user totals sum to the global successful-transfer total.
-  const perUser = USERS.reduce((sum, u) => sum + successfulTransferTotal(events, u.userId), 0);
-  const global = events
-    .filter((e) => e.status === "SUCCESS" && MONETARY_ACTIONS.has(e.action))
-    .reduce((s, e) => s + e.amount, 0);
-  if (perUser !== global) {
-    throw new Error(`Per-user totals (${perUser}) do not sum to global total (${global}).`);
+  // Invariant 2: the largest-this-month holder is Juan Garcia Restrepo.
+  if (exp.largestTransferThisMonth.userName !== JUAN_NAME) {
+    throw new Error(`Largest transfer holder is "${exp.largestTransferThisMonth.userName}", expected "${JUAN_NAME}".`);
   }
 
-  // Invariant 3: enums are respected (defensive; buildEvents only uses valid values).
+  // Invariant 3: Pedro's today anchors are present (both transfers sum to 4,300,000).
+  const pedroToday = events.filter(
+    (e) => e.documentNumber === PEDRO_DOC && e.transactionType === MONETARY_TRANSACTION_TYPE && e.transactionState === "Exitosa" && e.initialTrxHour.startsWith("09") || e.initialTrxHour.startsWith("11"),
+  );
+  const todayAnchors = events.filter(
+    (e) =>
+      e.documentNumber === PEDRO_DOC &&
+      e.transactionType === MONETARY_TRANSACTION_TYPE &&
+      e.transactionState === "Exitosa" &&
+      e.initialYearTrx === now.getUTCFullYear() &&
+      e.initialMonthTrx === now.getUTCMonth() + 1 &&
+      e.initialDayTrx === now.getUTCDate(),
+  );
+  void pedroToday; // used implicitly above for anchor existence
+  const todayTotal = todayAnchors.reduce((s, e) => s + (e.transactionValule ?? 0), 0);
+  const expectedTodayTotal = ANCHOR_AMOUNTS.PEDRO_TODAY_1 + ANCHOR_AMOUNTS.PEDRO_TODAY_2;
+  if (todayTotal < expectedTodayTotal) {
+    throw new Error(`Pedro's monetary total today is ${todayTotal}, expected at least ${expectedTodayTotal}.`);
+  }
+
+  // Invariant 4: user-modification anchor exists.
+  const modEvent = events.find((e) => e.operationType === "Modificación" && e.documentNumber === PEDRO_DOC && e.authorizedUserName === CARLOS_NAME);
+  if (!modEvent) throw new Error("User-modification anchor for Pedro/Carlos not found; generator broken.");
+
+  // Invariant 5: enum values are valid on all records.
   for (const e of events) {
-    if (!ACTION_TYPES.includes(e.action)) throw new Error(`Bad action ${e.action}`);
-    if (!CHANNELS.includes(e.channel)) throw new Error(`Bad channel ${e.channel}`);
-    if (!STATUSES.includes(e.status)) throw new Error(`Bad status ${e.status}`);
+    if (!CHANNELS.includes(e.channel)) throw new Error(`Bad channel "${e.channel}" on ${e._id}`);
+    if (!TRANSACTION_TYPES.includes(e.transactionType)) throw new Error(`Bad transactionType on ${e._id}`);
+    if (!TRANSACTION_STATES.includes(e.transactionState)) throw new Error(`Bad transactionState on ${e._id}`);
+    if (!DOCUMENT_TYPES.includes(e.documentType)) throw new Error(`Bad documentType on ${e._id}`);
+    if (e.isD2B !== "SI" && e.isD2B !== "NO") throw new Error(`Bad isD2B "${e.isD2B}" on ${e._id}`);
+    if (e.transactionType !== MONETARY_TRANSACTION_TYPE && (e.transactionValule ?? 0) !== 0) {
+      throw new Error(`Non-monetary record ${e._id} has non-zero transactionValule.`);
+    }
+  }
+
+  // Invariant 6: per-customer totals sum to the global successful monetary total.
+  const global = events.filter((e) => e.transactionType === MONETARY_TRANSACTION_TYPE && e.transactionState === "Exitosa").reduce((s, e) => s + (e.transactionValule ?? 0), 0);
+  const perCustomer = CUSTOMERS.reduce((s, c) => s + successfulTransferTotal(events, c.documentNumber), 0);
+  if (perCustomer !== global) {
+    throw new Error(`Per-customer totals (${perCustomer}) do not sum to global total (${global}). Unknown documentNumber in filler?`);
   }
 
   return events;

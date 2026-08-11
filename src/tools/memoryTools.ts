@@ -27,20 +27,29 @@ export const remember = tool(
   {
     name: "remember",
     description:
-      "Persist a SHORT, durable fact or reference about the current user across sessions (their team, role, " +
-      "preferences, or ids of records they care about). Use it when the user states something worth recalling " +
-      "in future conversations. Do NOT store raw record contents or sensitive personal data; store references " +
-      "(ids) and brief context only.",
+      "Persist a SHORT, durable fact or reference about the current user across sessions. " +
+      "Call it when the user states something worth recalling (team, role, preferences, ids of records they care about). " +
+      "ALSO call it proactively when you detect a suspicious or out-of-policy operation: save the event ids in " +
+      "'references' and a brief operational context in 'summary' (no account numbers, no customer names, no raw amounts). " +
+      "Do NOT store raw record contents or sensitive personal data.",
     schema: z.object({
-      key: z.string().describe("A short stable key for this memory, e.g. 'team' or 'watched_cases'."),
+      key: z.string().describe("A short stable key for this memory, e.g. 'team', 'watched_cases', or 'alert_2026-08-08'."),
       kind: z
-        .enum(["profile", "preference", "reference"])
-        .describe("profile = who the user is; preference = how they like to work; reference = ids they care about."),
-      summary: z.string().describe("One short sentence of lightweight context. No raw record contents."),
+        .enum(["profile", "preference", "reference", "alert"])
+        .describe(
+          "profile = who the user is; preference = how they like to work; " +
+          "reference = ids they care about; alert = suspicious or out-of-policy operation detected.",
+        ),
+      summary: z
+        .string()
+        .describe(
+          "One short sentence of lightweight context. For alerts: describe the anomaly type and date, " +
+          "never account numbers, customer names, or raw monetary amounts.",
+        ),
       references: z
         .array(z.string())
         .optional()
-        .describe("Optional list of record ids this memory refers to."),
+        .describe("Record ids this memory refers to (e.g. ['rcc_00482', 'rcc_00483'])."),
     }),
   },
 );

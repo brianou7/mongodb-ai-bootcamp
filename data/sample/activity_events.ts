@@ -181,7 +181,7 @@ type TransactionMode = (typeof import("../../src/query/schema").TRANSACTION_MODE
 // ============================================================
 
 const SEED = 424242;
-/** 483 filler + 13 existing anchors + 4 KB anchors = 500 total events. */
+/** 483 filler + 13 existing anchors + 4 KB anchors + 5 Diego anchors = 505 total events. */
 const FILLER_COUNT = 483;
 const DAY_MS = 86_400_000;
 
@@ -200,6 +200,13 @@ const ANCHOR_AMOUNTS = {
   KB_DIVIDEND: 620_000,          // R005 violation: dividendos = $0; P90–P99 Envigado range
   KB_OPERACION_ANOMALY: 2_100_000, // quantitative anomaly: > P99 Guayabal ($1.796.580)
   KB_GUAYABAL_NORMAL: 1_050_000, // normal for Guayabal (<P90 $1.159.970); ALERTA ALTO for Envigado
+  // Diego López — July 8, 2026 hybrid scenario (titular, Envigado, cuenta corriente operacional)
+  // TX1 + TX2 + TX3 = 1.030.000 COP  > P99 Envigado ($673.450), < max ($1.235.500) → ALERTA ALTO → NEEDS_REVIEW
+  DIEGO_TX1: 480_000,               // 09:15, SVP, code 0320
+  DIEGO_TX2: 350_000,               // 14:30, APP, code 0381
+  DIEGO_TX3: 200_000,               // 16:45, NEG, code 0320
+  DIEGO_NEAR_MISS_NOTILDE: 300_000, // near-miss A: "Diego Lopez" (sin tilde), Jul 8 — excluded by exact name filter
+  DIEGO_NEAR_MISS_NEXTDAY: 150_000, // near-miss B: "Diego López", Jul 9 — excluded by date filter
 } as const;
 
 /** All filler monetary amounts stay below 8 M to preserve the month ranking. */
@@ -250,6 +257,22 @@ const LUIS_IP = "181.60.31.209";
 const ROBERTO_DOC = "71245893";
 const ROBERTO_NAME = "Roberto Salazar Pinto";
 const ROBERTO_PERSONAL_ACCOUNT = "55612870034";
+
+// Diego López — titular, cuenta corriente operacional, Envigado (hybrid scenario July 8, 2026)
+const DIEGO_DOC = "1089234567";
+const DIEGO_NAME = "Diego López";
+const DIEGO_ACCOUNT = "62378901234";
+const DIEGO_ACC_TYPE: ProductType = "CUENTA_CORRIENTES";
+const DIEGO_IP = "10.30.46.118";
+// Near-miss A: similar name without accent — distinct person, excluded by exact name match
+const DIEGO_NOTILDE_DOC = "1089234568";
+const DIEGO_NOTILDE_NAME = "Diego Lopez";
+const DIEGO_NOTILDE_ACCOUNT = "62378901235";
+// Fixed dates for Diego's deterministic scenario (July 8–9, 2026)
+const DIEGO_YEAR = 2026;
+const DIEGO_MONTH = 7;
+const DIEGO_DAY_8 = 8;
+const DIEGO_DAY_9 = 9;
 
 // ============================================================
 // PRNG and helpers
@@ -346,6 +369,9 @@ const CUSTOMERS: readonly CustomerEntry[] = [
   { documentNumber: CARMEN_DOC, documentType: "CC", customerName: CARMEN_NAME, account: VENTAS_ACCOUNT, accType: VENTAS_ACC_TYPE },
   { documentNumber: LUIS_DOC, documentType: "CC", customerName: LUIS_NAME, account: OPERACION_ACCOUNT, accType: OPERACION_ACC_TYPE },
   { documentNumber: ROBERTO_DOC, documentType: "CC", customerName: ROBERTO_NAME, account: ROBERTO_PERSONAL_ACCOUNT, accType: "CUENTA_CORRIENTES" },
+  // Diego López hybrid scenario actors
+  { documentNumber: DIEGO_DOC, documentType: "CC", customerName: DIEGO_NAME, account: DIEGO_ACCOUNT, accType: DIEGO_ACC_TYPE },
+  { documentNumber: DIEGO_NOTILDE_DOC, documentType: "CC", customerName: DIEGO_NOTILDE_NAME, account: DIEGO_NOTILDE_ACCOUNT, accType: "CUENTA_CORRIENTES" },
 ];
 
 // Transaction code catalog
@@ -1008,6 +1034,198 @@ function anchorKbGuayabalNormal(now: Date): Omit<RccEvent, "_id"> {
 }
 
 // ============================================================
+// Diego López hybrid scenario anchor builders (July 8–9, 2026)
+// ============================================================
+
+/**
+ * Diego López — TX 1 of 3, July 8 2026.
+ * 09:15, SVP, code 0320, $480.000 COP, Envigado.
+ * Part of the aggregate: total will be $1.030.000 > P99 Envigado → NEEDS_REVIEW.
+ */
+function anchorDiegoJul8Tx1(): Omit<RccEvent, "_id"> {
+  return {
+    sessionId: "diego001-f3e9-11ed-4d8e-438c4c9f0001",
+    transactionId: "diego001-66f2-11ee-43a5-478c42000001",
+    initialYearTrx: DIEGO_YEAR, initialMonthTrx: DIEGO_MONTH, initialDayTrx: DIEGO_DAY_8,
+    initialTrxHour: "09150000", finalTrxHour: "09150412",
+    finalTrxYear: DIEGO_YEAR, finalTrxMonth: DIEGO_MONTH, finalTrxDay: DIEGO_DAY_8,
+    transactionCode: "0320",
+    transactionCodeDesc: "Transferencia entre cuentas propias cuenta corriente",
+    responseCode: "000", responseCodeDesc: "Transacción aprobada",
+    technicalCode: "BP00000000", channel: "SVP",
+    deviceNameId: "SVP", ip: DIEGO_IP,
+    authenticationType: "Token", transactionType: "Monetaria",
+    transactionState: "Exitosa",
+    documentTypeCode: "TIPDOC_FS001", documentType: "CC",
+    documentNumber: DIEGO_DOC, customerName: DIEGO_NAME,
+    currency: "COP", localAmount: ANCHOR_AMOUNTS.DIEGO_TX1,
+    transactionValule: ANCHOR_AMOUNTS.DIEGO_TX1,
+    originProductType: DIEGO_ACC_TYPE, originProductNumber: DIEGO_ACCOUNT,
+    destinyProductType: "CUENTA_CORRIENTES", destinyProductNumber: OPERACION_ACCOUNT,
+    destinyProductRelation: "Propia", transactionMode: "Virtual",
+    transactionVoucherNumber: 801001, commission: "NO",
+    excludeITC: false, isD2B: "SI",
+    timestamp: makeTimestamp(DIEGO_YEAR, DIEGO_MONTH, DIEGO_DAY_8),
+    transactionStatusApproval: "Aprobado",
+    authenticationTransaction: "Token",
+    entitlementRol: "Titular", entitlementPrivilege: "Admon Autonomo",
+    transactionDesc: "Transferencia operacional — primer movimiento del día",
+    reasonTransaction: "Pago proveedores operación",
+    originCity: "Envigado",
+  };
+}
+
+/**
+ * Diego López — TX 2 of 3, July 8 2026.
+ * 14:30, APP, code 0381, $350.000 COP, Envigado.
+ */
+function anchorDiegoJul8Tx2(): Omit<RccEvent, "_id"> {
+  return {
+    sessionId: "diego002-f3e9-11ed-4d8e-438c4c9f0002",
+    transactionId: "diego002-66f2-11ee-43a5-478c42000002",
+    initialYearTrx: DIEGO_YEAR, initialMonthTrx: DIEGO_MONTH, initialDayTrx: DIEGO_DAY_8,
+    initialTrxHour: "14300000", finalTrxHour: "14300527",
+    finalTrxYear: DIEGO_YEAR, finalTrxMonth: DIEGO_MONTH, finalTrxDay: DIEGO_DAY_8,
+    transactionCode: "0381",
+    transactionCodeDesc: "Transferencia nacional a terceros cuenta corriente",
+    responseCode: "000", responseCodeDesc: "Transacción aprobada",
+    technicalCode: "BP00000000", channel: "APP",
+    deviceNameId: "Dispositivo móvil", ip: DIEGO_IP,
+    authenticationType: "Biometría huella", transactionType: "Monetaria",
+    transactionState: "Exitosa",
+    documentTypeCode: "TIPDOC_FS001", documentType: "CC",
+    documentNumber: DIEGO_DOC, customerName: DIEGO_NAME,
+    currency: "COP", localAmount: ANCHOR_AMOUNTS.DIEGO_TX2,
+    transactionValule: ANCHOR_AMOUNTS.DIEGO_TX2,
+    originProductType: DIEGO_ACC_TYPE, originProductNumber: DIEGO_ACCOUNT,
+    destinyProductType: "CUENTA_DE_AHORRO", destinyProductNumber: "45821037600",
+    destinyProductRelation: "Inscrita", transactionMode: "Virtual",
+    transactionVoucherNumber: 801002, commission: "NO",
+    excludeITC: false, isD2B: "SI",
+    timestamp: makeTimestamp(DIEGO_YEAR, DIEGO_MONTH, DIEGO_DAY_8),
+    transactionStatusApproval: "Aprobado",
+    authenticationTransaction: "Biometría huella",
+    entitlementRol: "Titular", entitlementPrivilege: "Admon Autonomo",
+    transactionDesc: "Pago insumos producción — segundo movimiento",
+    reasonTransaction: "Compra insumos producción",
+    originCity: "Envigado",
+    brandModel: "iPhone 14", osVersion: "iOS 17", appVersion: "25.3.0",
+  };
+}
+
+/**
+ * Diego López — TX 3 of 3, July 8 2026.
+ * 16:45, NEG, code 0320, $200.000 COP, Envigado.
+ */
+function anchorDiegoJul8Tx3(): Omit<RccEvent, "_id"> {
+  return {
+    sessionId: "diego003-f3e9-11ed-4d8e-438c4c9f0003",
+    transactionId: "diego003-66f2-11ee-43a5-478c42000003",
+    initialYearTrx: DIEGO_YEAR, initialMonthTrx: DIEGO_MONTH, initialDayTrx: DIEGO_DAY_8,
+    initialTrxHour: "16450000", finalTrxHour: "16450318",
+    finalTrxYear: DIEGO_YEAR, finalTrxMonth: DIEGO_MONTH, finalTrxDay: DIEGO_DAY_8,
+    transactionCode: "0320",
+    transactionCodeDesc: "Transferencia entre cuentas propias cuenta corriente",
+    responseCode: "000", responseCodeDesc: "Transacción aprobada",
+    technicalCode: "BP00000000", channel: "NEG",
+    deviceNameId: "NEG", ip: DIEGO_IP,
+    authenticationType: "OTP", transactionType: "Monetaria",
+    transactionState: "Exitosa",
+    documentTypeCode: "TIPDOC_FS001", documentType: "CC",
+    documentNumber: DIEGO_DOC, customerName: DIEGO_NAME,
+    currency: "COP", localAmount: ANCHOR_AMOUNTS.DIEGO_TX3,
+    transactionValule: ANCHOR_AMOUNTS.DIEGO_TX3,
+    originProductType: DIEGO_ACC_TYPE, originProductNumber: DIEGO_ACCOUNT,
+    destinyProductType: "CUENTA_CORRIENTES", destinyProductNumber: OPERACION_ACCOUNT,
+    destinyProductRelation: "Propia", transactionMode: "Virtual",
+    transactionVoucherNumber: 801003, commission: "NO",
+    excludeITC: false, isD2B: "SI",
+    timestamp: makeTimestamp(DIEGO_YEAR, DIEGO_MONTH, DIEGO_DAY_8),
+    transactionStatusApproval: "Aprobado",
+    authenticationTransaction: "OTP",
+    entitlementRol: "Titular", entitlementPrivilege: "Admon Autonomo",
+    transactionDesc: "Transferencia operacional — cierre de día",
+    reasonTransaction: "Cierre operacional diario",
+    originCity: "Envigado",
+  };
+}
+
+/**
+ * Near-miss A: "Diego Lopez" (sin tilde) — persona distinta, mismo día July 8 2026.
+ * Una consulta exacta por customerName="Diego López" NO debe incluir este registro.
+ * Confirma que el filtro discrimina por acento.
+ */
+function anchorDiegoNoTildeJul8(): Omit<RccEvent, "_id"> {
+  return {
+    sessionId: "diegon01-f3e9-11ed-4d8e-438c4c9f0001",
+    transactionId: "diegon01-66f2-11ee-43a5-478c42000001",
+    initialYearTrx: DIEGO_YEAR, initialMonthTrx: DIEGO_MONTH, initialDayTrx: DIEGO_DAY_8,
+    initialTrxHour: "10300000", finalTrxHour: "10300245",
+    finalTrxYear: DIEGO_YEAR, finalTrxMonth: DIEGO_MONTH, finalTrxDay: DIEGO_DAY_8,
+    transactionCode: "0380",
+    transactionCodeDesc: "Transferencia nacional a terceros cuenta de ahorros",
+    responseCode: "000", responseCodeDesc: "Transacción aprobada",
+    technicalCode: "BP00000000", channel: "APP",
+    deviceNameId: "Dispositivo móvil", ip: "10.30.46.119",
+    authenticationType: "Token", transactionType: "Monetaria",
+    transactionState: "Exitosa",
+    documentTypeCode: "TIPDOC_FS001", documentType: "CC",
+    documentNumber: DIEGO_NOTILDE_DOC, customerName: DIEGO_NOTILDE_NAME,
+    currency: "COP", localAmount: ANCHOR_AMOUNTS.DIEGO_NEAR_MISS_NOTILDE,
+    transactionValule: ANCHOR_AMOUNTS.DIEGO_NEAR_MISS_NOTILDE,
+    originProductType: "CUENTA_CORRIENTES", originProductNumber: DIEGO_NOTILDE_ACCOUNT,
+    destinyProductType: "CUENTA_DE_AHORRO", destinyProductNumber: "55123456789",
+    destinyProductRelation: "Inscrita", transactionMode: "Virtual",
+    transactionVoucherNumber: 801010, commission: "NO",
+    excludeITC: false, isD2B: "NO",
+    timestamp: makeTimestamp(DIEGO_YEAR, DIEGO_MONTH, DIEGO_DAY_8),
+    transactionStatusApproval: "Aprobado",
+    authenticationTransaction: "Token",
+    entitlementRol: "Titular", entitlementPrivilege: "Admon Autonomo",
+    transactionDesc: "Transferencia a cuenta de ahorros",
+    originCity: "Envigado",
+  };
+}
+
+/**
+ * Near-miss B: "Diego López" (mismo titular) — día siguiente July 9 2026.
+ * Una consulta por initialDayTrx=8 NO debe incluir este registro.
+ * Confirma que el filtro de fecha discrimina días contiguos.
+ */
+function anchorDiegoLopezJul9(): Omit<RccEvent, "_id"> {
+  return {
+    sessionId: "diego009-f3e9-11ed-4d8e-438c4c9f0009",
+    transactionId: "diego009-66f2-11ee-43a5-478c42000009",
+    initialYearTrx: DIEGO_YEAR, initialMonthTrx: DIEGO_MONTH, initialDayTrx: DIEGO_DAY_9,
+    initialTrxHour: "09000000", finalTrxHour: "09000310",
+    finalTrxYear: DIEGO_YEAR, finalTrxMonth: DIEGO_MONTH, finalTrxDay: DIEGO_DAY_9,
+    transactionCode: "0320",
+    transactionCodeDesc: "Transferencia entre cuentas propias cuenta corriente",
+    responseCode: "000", responseCodeDesc: "Transacción aprobada",
+    technicalCode: "BP00000000", channel: "SVP",
+    deviceNameId: "SVP", ip: DIEGO_IP,
+    authenticationType: "Token", transactionType: "Monetaria",
+    transactionState: "Exitosa",
+    documentTypeCode: "TIPDOC_FS001", documentType: "CC",
+    documentNumber: DIEGO_DOC, customerName: DIEGO_NAME,
+    currency: "COP", localAmount: ANCHOR_AMOUNTS.DIEGO_NEAR_MISS_NEXTDAY,
+    transactionValule: ANCHOR_AMOUNTS.DIEGO_NEAR_MISS_NEXTDAY,
+    originProductType: DIEGO_ACC_TYPE, originProductNumber: DIEGO_ACCOUNT,
+    destinyProductType: "CUENTA_CORRIENTES", destinyProductNumber: OPERACION_ACCOUNT,
+    destinyProductRelation: "Propia", transactionMode: "Virtual",
+    transactionVoucherNumber: 801009, commission: "NO",
+    excludeITC: false, isD2B: "SI",
+    timestamp: makeTimestamp(DIEGO_YEAR, DIEGO_MONTH, DIEGO_DAY_9),
+    transactionStatusApproval: "Aprobado",
+    authenticationTransaction: "Token",
+    entitlementRol: "Titular", entitlementPrivilege: "Admon Autonomo",
+    transactionDesc: "Transferencia operacional — día siguiente",
+    reasonTransaction: "Pago proveedores operación",
+    originCity: "Envigado",
+  };
+}
+
+// ============================================================
 // Build full dataset
 // ============================================================
 
@@ -1038,6 +1256,13 @@ function buildEvents(now: Date): RccEvent[] {
   raw.push(anchorKbOperacionAnomaly(now));
   raw.push(anchorKbGuayabalNormal(now));
 
+  // Diego López hybrid scenario anchors (fixed dates: July 8–9, 2026)
+  raw.push(anchorDiegoJul8Tx1());
+  raw.push(anchorDiegoJul8Tx2());
+  raw.push(anchorDiegoJul8Tx3());
+  raw.push(anchorDiegoNoTildeJul8());
+  raw.push(anchorDiegoLopezJul9());
+
   // Sort chronologically, then assign stable IDs.
   raw.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
   return raw.map((e, i) => ({ _id: `rcc_${String(i + 1).padStart(5, "0")}`, ...e }));
@@ -1055,6 +1280,8 @@ export interface Expectations {
   focusUser: { userId: string; userName: string; totalSuccessfulTransferMinorUnits: number };
   /** The pair of records that represent the dual-control violation. */
   dualControlViolation: { initiatedId: string; approvedId: string; userId: string };
+  /** Diego López's July 8, 2026 aggregate for the hybrid scenario. */
+  diegoLopezJul8: { total: number; count: number; documentNumber: string; userName: string };
 }
 
 /** Sum of all Monetaria+Exitosa transactionValule for a given documentNumber. */
@@ -1080,6 +1307,17 @@ export function computeExpectations(events: RccEvent[], now: Date = new Date()):
   const dualAppr = events.find((e) => e.transactionStatusApproval === "Aprobado" && e.authorizedUserName === CARLOS_NAME && (e.transactionValule ?? 0) === ANCHOR_AMOUNTS.CARLOS_DUAL);
   if (!dualInit || !dualAppr) throw new Error("Dual-control violation anchor missing; generator broken.");
 
+  const diegoJul8Txs = events.filter(
+    (e) =>
+      e.customerName === DIEGO_NAME &&
+      e.initialYearTrx === DIEGO_YEAR &&
+      e.initialMonthTrx === DIEGO_MONTH &&
+      e.initialDayTrx === DIEGO_DAY_8 &&
+      e.transactionType === MONETARY_TRANSACTION_TYPE &&
+      e.transactionState === "Exitosa",
+  );
+  const diegoJul8Total = diegoJul8Txs.reduce((s, e) => s + (e.transactionValule ?? 0), 0);
+
   return {
     totalEvents: events.length,
     largestTransferThisMonth: {
@@ -1097,6 +1335,12 @@ export function computeExpectations(events: RccEvent[], now: Date = new Date()):
       initiatedId: dualInit._id,
       approvedId: dualAppr._id,
       userId: CARLOS_DOC,
+    },
+    diegoLopezJul8: {
+      total: diegoJul8Total,
+      count: diegoJul8Txs.length,
+      documentNumber: DIEGO_DOC,
+      userName: DIEGO_NAME,
     },
   };
 }
@@ -1171,6 +1415,25 @@ export function generateActivityEvents(now: Date = new Date()): RccEvent[] {
 
   const kbGuayabal = events.find((e) => e.documentNumber === CARMEN_DOC && e.originCity === "Guayabal" && (e.transactionValule ?? 0) === ANCHOR_AMOUNTS.KB_GUAYABAL_NORMAL);
   if (!kbGuayabal) throw new Error("KB anchor: Guayabal normal transfer not found; generator broken.");
+
+  // Invariant 8: Diego López July 8 aggregate matches expected totals.
+  const expectedDiegoTotal = ANCHOR_AMOUNTS.DIEGO_TX1 + ANCHOR_AMOUNTS.DIEGO_TX2 + ANCHOR_AMOUNTS.DIEGO_TX3;
+  if (exp.diegoLopezJul8.total !== expectedDiegoTotal) {
+    throw new Error(
+      `Diego López Jul 8 total is ${exp.diegoLopezJul8.total}, expected ${expectedDiegoTotal}.`,
+    );
+  }
+  if (exp.diegoLopezJul8.count !== 3) {
+    throw new Error(`Diego López Jul 8 count is ${exp.diegoLopezJul8.count}, expected 3.`);
+  }
+  // Near-miss A: "Diego Lopez" (sin tilde) anchor identified by its unique voucher number.
+  const noTildeAnchor = events.find((e) => e.transactionVoucherNumber === 801010);
+  if (!noTildeAnchor) throw new Error("Diego Lopez (no tilde) near-miss anchor (voucher 801010) missing.");
+  if (noTildeAnchor.customerName !== DIEGO_NOTILDE_NAME) throw new Error("Diego Lopez (no tilde) near-miss anchor has wrong customerName.");
+  // Near-miss B: Diego López on Jul 9 anchor identified by its unique voucher number.
+  const diegoJul9Anchor = events.find((e) => e.transactionVoucherNumber === 801009);
+  if (!diegoJul9Anchor) throw new Error("Diego López Jul 9 near-miss anchor (voucher 801009) missing.");
+  if (diegoJul9Anchor.initialDayTrx !== DIEGO_DAY_9) throw new Error("Diego López Jul 9 anchor has wrong day.");
 
   // Invariant 6: per-customer totals sum to the global successful monetary total.
   const global = events.filter((e) => e.transactionType === MONETARY_TRANSACTION_TYPE && e.transactionState === "Exitosa").reduce((s, e) => s + (e.transactionValule ?? 0), 0);

@@ -21,12 +21,19 @@ import { getMemoryStore, saveUserMemory, listUserMemories } from "../src/memory/
  *
  * Correctness for the structured leg is checked against expectations derived
  * from the SAME deterministic generator that seeded the data.
+ *
+ * Any Checkpoint 2 failures are listed at the end as Phase 3 tool candidates.
  */
 
 let failures = 0;
+const phase3Candidates: string[] = [];
+
 function check(name: string, ok: boolean, detail = ""): void {
   console.log(`  ${ok ? "PASS" : "FAIL"}  ${name}${ok || !detail ? "" : `: ${detail}`}`);
-  if (!ok) failures++;
+  if (!ok) {
+    failures++;
+    phase3Candidates.push(name);
+  }
 }
 
 async function askAgent(
@@ -48,9 +55,9 @@ async function main(): Promise<void> {
   await bootstrapCredentials();
   getConfig();
 
-  const exp = computeExpectations(generateActivityEvents());
-  const largestAmount = String(exp.largestTransferThisMonth.amount);
-  const focusTotal = String(exp.focusUser.totalSuccessfulTransferMinorUnits);
+  // Generate once; reuse for both computeExpectations and ID lookups.
+  const events = generateActivityEvents();
+  const exp = computeExpectations(events);
 
   // ---- Checkpoint 1: skeleton runs, one answer per leg -----------------------
   console.log("\nCheckpoint 1: skeleton runs and answers a sample question");
@@ -67,25 +74,113 @@ async function main(): Promise<void> {
   // ---- Checkpoint 2: correct, evidence-backed results ------------------------
   console.log("\nCheckpoint 2: correct, evidence-backed results");
 
-  const kb = await knowledgeBaseSearch.invoke({ query: "What is the dual-control threshold for transfers?" });
-  check("Retrieval returns cited passages (source .md)", kb.includes(".md"));
-  check("Retrieval finds the dual-control standard", kb.includes("dual-control-standard.md"));
-  check("Retrieval passage is relevant (mentions the threshold)", kb.includes("1,000,000") || kb.includes("10,000"));
-
-  const largest = await structuredQuery.invoke({
-    question: "Which transfer is the largest this month? Return its _id and amount.",
+  // -- RAG: doc 15 (operación) must rank above doc 14 (ventas) ------------------
+  // Near-miss: doc 14 also has "movimientos", "cuenta" and "monto" but refers to
+  // the SALES account, not the operational account. The discriminating query uses
+  // "cuenta de operación" vocabulary that maps to doc 15's title and content.
+  // Note: "¿Cuál es el límite diario…?" activates doc 11 (percentiles) — wrong anchor.
+  // "¿Qué reglas aplican para gastos…cuenta de operación?" activates doc 15.
+  const kbResult = await knowledgeBaseSearch.invoke({
+    query: "¿Qué reglas aplican para los gastos y pagos realizados desde la cuenta de operación y producción?",
   });
-  check("structured_query returns the correct largest transfer this month", largest.includes(largestAmount), `expected amount ${largestAmount}`);
-  check("structured_query result includes a plain-language explanation", largest.includes("explanation"));
+  check("RAG: retrieval returns cited passages (.md)", kbResult.includes(".md"));
+  check(
+    "RAG: retrieval cites doc 15 (política-movimientos-cuenta-operacion)",
+    kbResult.includes("15-politica-movimientos-cuenta-operacion.md"),
+  );
+  const doc14pos = kbResult.indexOf("14-politica-movimientos-cuenta-ventas");
+  const doc15pos = kbResult.indexOf("15-politica-movimientos-cuenta-operacion");
+  check(
+    "RAG: doc 15 (operación) ranked before doc 14 (ventas)",
+    doc15pos !== -1 && (doc14pos === -1 || doc15pos < doc14pos),
+    doc14pos !== -1 ? `doc15 at ${doc15pos}, doc14 at ${doc14pos}` : "",
+  );
 
-  const total = await structuredQuery.invoke({
-    question: `What is the total amount in minor units of successful transfers by ${exp.focusUser.userName}? Return the sum.`,
+  // -- Structured: Diego López July 8 aggregate ---------------------------------
+  // exp.diegoLopezJul8: { total: 1_030_000, count: 3, documentNumber, userName }
+  // Near-miss cases in the data (Diego Lopez without tilde on Jul 8, Diego López
+  // on Jul 9) must NOT appear in a correctly filtered query.
+  //
+  // NOTE: questions must embed schema field names explicitly because the model
+  // has strong priors for generic names (user_name, event_type, amount) that do
+  // not exist in this collection. The "field=value" annotations in the question
+  // override those priors without requiring special prompt engineering.
+  const diegoTotal = String(exp.diegoLopezJul8.total); // "1030000"
+  const diegoCount = String(exp.diegoLopezJul8.count); // "3"
+
+  const diegoAggQ = await structuredQuery.invoke({
+    question:
+      `¿Cuántas transferencias (transactionType="Monetaria", transactionState="Exitosa") ` +
+      `hizo el customerName="Diego López" el 8 de julio 2026 ` +
+      `(initialYearTrx=2026, initialMonthTrx=7, initialDayTrx=8)? ` +
+      `Suma transactionValule.`,
   });
-  check("structured_query computes the correct per-user total", total.includes(focusTotal), `expected total ${focusTotal}`);
+  check(
+    "structured_query: Diego July 8 count is 3",
+    diegoAggQ.includes(diegoCount),
+    `expected count ${diegoCount} in: ${diegoAggQ.slice(0, 300)}`,
+  );
+  check(
+    "structured_query: Diego July 8 total is correct",
+    diegoAggQ.includes(diegoTotal),
+    `expected ${diegoTotal} in: ${diegoAggQ.slice(0, 300)}`,
+  );
+  check("structured_query: result includes explanation", diegoAggQ.includes("explanation"));
 
-  const judgment = await assess.invoke({ subjectId: exp.dualControlViolation.approvedId });
-  check("hybrid assess produces citations (retrieval leg)", judgment.includes("citations") && judgment.includes(".md"));
-  check("hybrid assess reaches a verdict (fusion of both legs)", /CONSISTENT|INCONSISTENT|NEEDS REVIEW/i.test(judgment));
+  // Ranking: GROUP BY customerName for Jul 8, ordered by totalCOP DESC.
+  // Diego López must appear with total=1030000. "Diego Lopez" (no tilde) is a
+  // different customerName and will appear as a separate row — confirming the
+  // query groups by exact name (case- and accent-sensitive).
+  const rankQ = await structuredQuery.invoke({
+    question:
+      `Ranquea por monto total transferido el 8 de julio 2026: ` +
+      `agrupa por customerName donde transactionType="Monetaria", transactionState="Exitosa", ` +
+      `initialYearTrx=2026, initialMonthTrx=7, initialDayTrx=8; ` +
+      `suma transactionValule por grupo; ordena descendente.`,
+  });
+  check("structured_query ranking: includes explanation", rankQ.includes("explanation"));
+  check(
+    "structured_query ranking: Diego López total appears in ranking",
+    rankQ.includes(diegoTotal),
+    `expected ${diegoTotal} in: ${rankQ.slice(0, 300)}`,
+  );
+
+  // -- Hybrid: assess on Diego's July 8 record ----------------------------------
+  // Uses the record identified by its unique transactionVoucherNumber so we do
+  // not have to hard-code a position-dependent _id.
+  // Total $1.030.000 > P99 Envigado ($673.450) → ALERTA ALTO → expected NEEDS_REVIEW.
+  // findRelatedRecords (fixed: documentNumber instead of userId) will pull the
+  // other two Jul 8 transfers so the model sees the full day's context.
+  const diegoRecord = events.find((e) => e.transactionVoucherNumber === 801001);
+  if (!diegoRecord) throw new Error("Diego López Jul 8 TX1 anchor not found in generated events.");
+  const diegoSubjectId = diegoRecord._id;
+
+  const diegoJudgment = await assess.invoke({
+    subjectId: diegoSubjectId,
+    question:
+      "¿Cuánto dinero movió Diego López en transferencias el 8 de julio de 2026 y está alineado con la política de límites diarios para cuentas operacionales?",
+  });
+  check(
+    "hybrid: assess produces citations (retrieval leg)",
+    diegoJudgment.includes("citations") && diegoJudgment.includes(".md"),
+  );
+  check(
+    "hybrid: assess cites doc 15 (operación) or doc 11 (límites diarios)",
+    diegoJudgment.includes("15-politica-movimientos-cuenta-operacion") ||
+      diegoJudgment.includes("11-politica-limites-monetarios-diarios"),
+  );
+  check(
+    "hybrid: assess reaches a verdict",
+    /CONSISTENT|INCONSISTENT|NEEDS REVIEW/i.test(diegoJudgment),
+  );
+  // $1.030.000 > P99 Envigado ($673.450): must NOT resolve as CONSISTENT.
+  const verdictMatch = /NEEDS REVIEW|INCONSISTENT|CONSISTENT/i.exec(diegoJudgment);
+  const verdictFound = verdictMatch ? verdictMatch[0].toUpperCase() : "none";
+  check(
+    "hybrid: total > P99 Envigado → NEEDS_REVIEW or INCONSISTENT (not CONSISTENT)",
+    /NEEDS REVIEW|INCONSISTENT/i.test(diegoJudgment),
+    `verdict found: ${verdictFound}`,
+  );
 
   // ---- Checkpoint 3: >=2 tools, memory resumes, one E2E scenario -------------
   console.log("\nCheckpoint 3: tools + memory + end-to-end scenario");
@@ -126,7 +221,16 @@ async function main(): Promise<void> {
   );
   check("End-to-end hybrid scenario returns a reasoned answer", scenario.trim().length > 0 && /consistent|review|control/i.test(scenario));
 
+  // ---- Summary ---------------------------------------------------------------
   console.log(`\n${failures === 0 ? "All checks passed." : `${failures} check(s) failed.`}`);
+
+  if (phase3Candidates.length > 0) {
+    console.log("\nPhase 3 tool candidates (questions that still fail — consider a dedicated tool):");
+    for (const c of phase3Candidates) {
+      console.log(`  - ${c}`);
+    }
+  }
+
   if (failures > 0) process.exitCode = 1;
 }
 

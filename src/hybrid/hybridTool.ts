@@ -34,10 +34,17 @@ async function findRelatedRecords(record: Document): Promise<Document[]> {
   const db = await getDb();
 
   const at = record.timestamp instanceof Date ? record.timestamp : null;
-  const sameTransaction: Filter<Document>[] = [{ userId: record.userId }];
-  if (typeof record.amount === "number" && record.amount > 0) {
-    sameTransaction.push({ amount: record.amount });
+  const sameTransaction: Filter<Document>[] = [];
+  // Use the delegate field when the actor is a proxy; otherwise fall back to the account holder.
+  if (record.authorizedUserName) {
+    sameTransaction.push({ authorizedUserName: record.authorizedUserName });
+  } else if (record.documentNumber) {
+    sameTransaction.push({ documentNumber: record.documentNumber });
   }
+  if (typeof record.transactionValule === "number" && record.transactionValule > 0) {
+    sameTransaction.push({ transactionValule: record.transactionValule });
+  }
+  if (sameTransaction.length === 0) return [];
 
   const filter: Filter<Document> = {
     _id: { $ne: record._id },
@@ -85,7 +92,13 @@ export const assess = tool(
 
     // Leg 2: retrieval. Seed the query with the record's salient fields so the
     // most relevant policy passages surface.
-    const retrievalQuery = `${focus} action=${String(record.action)} amount=${String(record.amount)} channel=${String(record.channel)} status=${String(record.status)}`;
+    const retrievalQuery =
+      `${focus} ` +
+      `transactionType=${String(record.transactionType ?? "")} ` +
+      `amount=${String(record.transactionValule ?? "")} ` +
+      `channel=${String(record.channel ?? "")} ` +
+      `state=${String(record.transactionState ?? "")} ` +
+      `originProductType=${String(record.originProductType ?? "")}`;
     const passages = await retrievePassages(retrievalQuery);
 
     // Fusion: reason over both, cite the passages.

@@ -47,4 +47,8 @@ Formato de respuesta para preguntas que mezclan "qué pasó" con "está permitid
 - **Veredicto:** CONSISTENT | INCONSISTENT | NEEDS REVIEW — una oración explicando por qué.
 - **Recomendación:** acción concreta si el veredicto no es CONSISTENT.
 
+Puedes recuperar texto de políticas Y consultar registros operativos, y combinas ambos. Usa knowledge_base_search para las políticas, structured_query para los registros y assess para evaluar un registro concreto frente a la política. Para preguntas que mezclan "qué pasó" con "está permitido", usa ambas vías y reconcílialas en una sola respuesta fundamentada y citada.
+
+Para preguntas sobre el total diario de un actor: llama primero structured_query para obtener el agregado (suma COP, conteo de transacciones, canales, horas usadas), luego llama assess sobre uno de esos registros pasando la misma pregunta. En el juicio de assess, los registros relacionados contienen las demás transacciones del mismo día; usa el total agregado de structured_query como referencia cuantitativa principal al comparar con los umbrales de política. El veredicto debe basarse en el total del día, no en el monto de un solo registro.
+
 Para preguntas solo de hechos (sin confrontación con política), omite assess y entrega el resultado con la descripción de la consulta que lo produjo.`;

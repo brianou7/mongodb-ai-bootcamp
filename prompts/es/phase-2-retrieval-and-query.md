@@ -49,24 +49,63 @@ CLAUDE.md.
 
 ```
 Para nuestro caso de uso híbrido quiero una sola respuesta que use tanto la política
-recuperada como una consulta estructurada, como hace la herramienta assess. Usando
-src/hybrid/hybridTool.ts como plantilla, ayúdame a asegurar que para [TU ESCENARIO DE
-MUESTRA] el agente (a) traiga el registro correcto, (b) recupere los pasajes de política
-relevantes y (c) los reconcilie en una respuesta fundamentada y citada. Muéstrame en qué
-punto entra el resultado de cada vía al prompt final. Si adaptas los prompts de assess,
-edita src/hybrid/prompts/en.ts o src/hybrid/prompts/es.ts y mantén el veredicto final como
-uno de los tokens en inglés CONSISTENT, INCONSISTENT o NEEDS REVIEW.
+recuperada como una consulta estructurada. Escenario de muestra: "¿Cuánto dinero movió
+Diego López en transferencias el 8 de julio de 2026 y está alineado con la política de
+límites diarios para cuentas operacionales?"
+
+Usando src/hybrid/hybridTool.ts como plantilla, ayúdame a verificar:
+
+(a) Consulta estructurada trae las transacciones correctas y discrimina casos cercanos:
+    - Principal: authorizedUserName="Diego López", timestamp=8 de julio de 2026,
+      transactionType="Monetaria", códigos de transferencia (ej. "0320")
+    - Devuelve: monto total COP movido, cantidad de transacciones, canales y horas usadas
+    - Caso cercano: agregar registros para "Diego Lopez" (sin tilde) o transferencias de Diego
+      el 9 de julio para confirmar que la consulta filtra correctamente, no solo devuelve la única coincidencia
+    
+(b) Recuperación de base de conocimiento cita los pasajes correctos y discrimina:
+    - Documento 15 (politica-movimientos-cuenta-operacion) para reglas de cuentas operacionales
+    - Documento 11 (politica-limites-monetarios-diarios) para umbrales diarios
+    - Extrae: límites diarios, horas permitidas, restricciones por tipo de usuario/cuenta
+    - Caso cercano: Documento 14 (politica-movimientos-cuenta-ventas) para cuentas ventas debe
+      ranquear menor; confirma que la recuperación discrimina por tipo de cuenta
+    
+(c) Assess reconcilia con lógica de agregación:
+    - ¿El total está dentro del límite diario para ese usuario y tipo de cuenta?
+    - ¿Hay patrones sospechosos (concentración, fuera de horario, transferencia muy grande)?
+    - Salida: CONSISTENT (alineado con política), INCONSISTENT (excede límites), o
+      NEEDS_REVIEW (borderline o patrón detectado)
+    - Caso límite: si Diego movió exactamente el límite → NEEDS_REVIEW
+    
+Muéstrame en qué punto entra el resultado de cada vía al prompt final y confirma que el
+veredicto esté fundamentado tanto en el resultado de la consulta como en la cita de política.
 ```
 
 ## Prompt: adaptar las verificaciones
 
 ```
 Actualiza scripts/verify.ts para que el Checkpoint 2 revise nuestros datos en lugar de los
-de ejemplo: que la recuperación devuelva un pasaje citado y relevante para [PREGUNTA]; que
-structured_query devuelva los registros correctos para [PREGUNTA] junto con una
-explicación; y (si es híbrido) que ambas vías aporten. Basa los valores esperados en las
-expectations que exporta nuestro generador, no en suposiciones escritas a mano. Ejecuta
-npm run verify y reporta qué pasa.
+de ejemplo:
+
+Para RAG: que recuperación discrimine documentos cercanos en
+"¿Cuál es el límite diario de transferencias para cuentas operacionales?"
+→ debe citar Documento 15, NO Documento 14 (que habla de cuentas ventas)
+→ confirma que ranquea Documento 15 primero aunque Documento 14 mencione "límite" y "cuenta"
+
+Para structured_query: agregaciones devuelven resultados correctos para
+"¿Cuántas transferencias realizó Diego López el 8 de julio de 2026 y cuál fue el monto total?"
+→ debe retornar COUNT (agregación), SUM de monto COP, explicación del pipeline
+→ prueba también: "Ranquea usuarios por monto total COP transferido el 8 de julio" (agregación con orden)
+
+Para híbrido: ambas vías aporten y manejen límites en
+"¿Cuánto dinero movió Diego López en transferencias el 8 de julio de 2026 y está alineado 
+con la política de límites diarios para cuentas operacionales?"
+→ structured_query devuelve cifras, retrieval cita límites, assess emite CONSISTENT/INCONSISTENT/NEEDS_REVIEW
+→ caso límite: si Diego movió exactamente el límite → NEEDS_REVIEW (no CONSISTENT)
+→ discriminación: si Diego movió menos que límite, límite existe, sin patrones → CONSISTENT
+
+Basa los valores esperados en las expectations que exporta nuestro generador, no en 
+suposiciones escritas a mano. Anota cualquier pregunta que falle en una lista para herramientas
+de Fase 3. Ejecuta npm run verify y reporta qué pasa.
 ```
 
 ## Ideas para probar en esta fase

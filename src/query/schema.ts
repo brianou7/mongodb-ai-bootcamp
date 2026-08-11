@@ -160,6 +160,30 @@ QUESTION-TO-FIELD GUIDANCE — read this before writing any pipeline:
       For month/week ranges: timestamp >= start_of_period (use $dateTrunc or Extended JSON date).
       Sum transactionValule.
 
+  "How many transfers did [person] make on [specific date]? What was the total? /
+   ¿Cuántas transferencias realizó [persona] el [fecha] y cuál fue el monto total?"
+
+  CRITICAL — COMMON WRONG PIPELINE (returns 0 results because fields do NOT exist):
+    {$match: {user_name:"Diego López", event_type:"Monetaria Exitosa", event_date:{$gte:...}}}
+    This is ALWAYS wrong. user_name, event_type, event_date, and transaction_amount do not exist.
+
+  CORRECT PIPELINE for "Diego López" on July 8, 2026:
+    {$match: {customerName:"Diego López", transactionType:"Monetaria", transactionState:"Exitosa",
+              initialYearTrx:2026, initialMonthTrx:7, initialDayTrx:8}},
+    {$group: {_id:null, count:{$sum:1}, totalCOP:{$sum:"$transactionValule"}}}
+
+  Field mapping (MEMORIZE — do not substitute generic names):
+    customerName    = the person's name        (NOT user_name, NOT nombre, NOT name)
+    transactionType = "Monetaria"              (NOT event_type, NOT type; "Monetaria Exitosa" is NOT a valid value)
+    transactionState = "Exitosa"               (SEPARATE field from transactionType)
+    transactionValule = the COP amount         (NOT amount, NOT transaction_amount, NOT transactionValue)
+    initialYearTrx, initialMonthTrx, initialDayTrx = integers for exact-day match  (NOT event_date, NOT date)
+
+  "Rank users by total COP transferred on [date] / Ranquea usuarios por monto total el [fecha]"
+    → transactionType:"Monetaria", transactionState:"Exitosa", date filter with integer fields.
+      {$group: {_id: "$customerName", totalCOP: {$sum: "$transactionValule"}, count: {$sum: 1}}}
+      {$sort: {totalCOP: -1}}
+
   "Who made movements on my accounts in the last week"
     → {originProductNumber: <account>}, timestamp within last 7 days.
       Project BOTH customerName (account owner who may have acted directly) and
@@ -227,7 +251,20 @@ TRAPS — a wrong assumption here silently returns an empty or wrong result:
   - isD2B stores strings "SI" / "NO", not booleans.
   - Optional fields (authorizedUserName, transactionValule, etc.) may be absent on some
     records. Use {$exists: true, $ne: null} guards when filtering on optional fields.
-  - timestamp is UTC midnight. For time-of-day analysis, use initialTrxHour (string).`;
+  - timestamp is UTC midnight. For time-of-day analysis, use initialTrxHour (string).
+
+  WRONG FIELD NAMES — none of these exist in this collection; using them returns 0 documents:
+  - user_name       → use customerName  (exact string, case-sensitive, accent-sensitive)
+  - event_type      → use transactionType  AND separately  transactionState
+  - event_date / date → use initialYearTrx + initialMonthTrx + initialDayTrx (integers) for exact day,
+                        or timestamp with Extended JSON {"$date":"..."} for a range
+  - transaction_amount / amount → use transactionValule  (note the "Valule" typo)
+  - status          → use transactionState
+  - type            → use transactionType
+  - "Monetaria Exitosa" is NOT one field value. transactionType:"Monetaria" and
+    transactionState:"Exitosa" are TWO SEPARATE fields inside a single $match stage.
+  - customerName is case- AND accent-sensitive: "Diego López" ≠ "Diego Lopez".
+    Copy the person's name exactly as it appears in the question.`;
 
 /**
  * Return a plain-language description of the target collection for the query

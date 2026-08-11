@@ -47,20 +47,62 @@ Do not add validation or allowlists to the query tool; keep it simple per CLAUDE
 
 ```
 For our hybrid use case, I want one answer that uses both retrieved policy and a
-structured lookup, like the assess tool does. Using src/hybrid/hybridTool.ts as the
-template, help me make sure that for [YOUR SAMPLE SCENARIO] the agent (a) pulls the
-right record, (b) retrieves the relevant policy passages, and (c) reconciles them in a
-grounded, cited answer. Show me where each leg's result enters the final prompt.
+structured lookup. Sample scenario: "¿Cuánto dinero movió Diego López en transferencias
+el 8 de julio de 2026 y está alineado con la política de límites diarios para cuentas
+operacionales?"
+
+Using src/hybrid/hybridTool.ts as the template, help me verify:
+
+(a) Structured query pulls the correct transactions and discriminates near-misses:
+    - Primary: authorizedUserName="Diego López", timestamp=July 8 2026, 
+      transactionType="Monetaria", transfer codes (e.g. "0320")
+    - Returns: total COP amount moved, transaction count, channels and times used
+    - Add near-miss test: also have records for "Diego Lopez" (misspelled) or Diego's transfers
+      on July 9 to confirm the query filters correctly, not just returns the only match
+    
+(b) Knowledge base retrieval cites the right policy passages and discriminates near-misses:
+    - Document 15 (politica-movimientos-cuenta-operacion) for operational account rules
+    - Document 11 (politica-limites-monetarios-diarios) for daily thresholds
+    - Extracts: daily limits, allowed hours, user/account type restrictions
+    - Add near-miss test: Document 14 (politica-movimientos-cuenta-ventas) for sales accounts
+      should rank lower; confirm retrieval discriminates by account type
+    
+(c) Assess reconciles and grounds the answer with aggregation logic:
+    - Is the total within the daily limit for that user and account type?
+    - Any suspicious patterns (concentration, off-hours, single large transfer)?
+    - Output: CONSISTENT (aligned with policy), INCONSISTENT (exceeds limits), 
+      or NEEDS_REVIEW (borderline or pattern detected)
+    - Test edge case: what if Diego moved exactly at the limit? → NEEDS_REVIEW
+    
+Show me where each leg's result enters the final prompt and confirm the verdict is
+grounded in both the query result AND the policy citation.
 ```
 
 ## Prompt: adapt the verify checks
 
 ```
 Update scripts/verify.ts so Checkpoint 2 checks our data instead of the sample data:
-retrieval returns a cited, relevant passage for [QUESTION]; structured_query returns the
-correct records for [QUESTION] with an explanation; and (if hybrid) both legs contribute.
+
+For RAG: retrieval discriminates near-miss documents in
+"What is the daily transfer limit for operational accounts?"
+→ must cite Document 15 (politica-movimientos-cuenta-operacion), not Document 14
+→ confirm it ranks Document 15 first despite Document 14 mentioning "limit" and "account"
+
+For structured_query: aggregation returns correct results for
+"How many transfers did Diego López execute on July 8, 2026 and total amount?"
+→ must return transaction COUNT (aggregation), total COP (SUM), explanation of pipeline
+→ test also: "Rank users by total COP transferred on July 8" (ordering aggregation)
+
+For hybrid: both legs contribute and handle edge cases in
+"How much money did Diego López move in transfers on July 8, 2026 and is it aligned 
+with the daily limit policy for operational accounts?"
+→ structured_query returns figures, retrieval cites limits, assess emits CONSISTENT/INCONSISTENT/NEEDS_REVIEW
+→ test edge case: if Diego moved exactly at limit → NEEDS_REVIEW (not CONSISTENT)
+→ test discrimination: if Diego moved less than limit, limit exists, no suspicious patterns → CONSISTENT
+
 Base the expected values on our generator's exported expectations, not hard-coded
-guesses. Run npm run verify and report what passes.
+guesses. Note any question that still fails in a list for Phase 3 candidate tools.
+Run npm run verify and report what passes.
 ```
 
 ## Ideas to try in this phase

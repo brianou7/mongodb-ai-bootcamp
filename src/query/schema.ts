@@ -142,6 +142,16 @@ SECURITY AND CONTROL:
   isD2B                 string  "SI" or "NO" (string, NOT a boolean)
   ip                    string  originating IP address
 
+BUSINESS CONTEXT FIELDS (present on KB-related events):
+  originCity            string  sede or city where the transaction originated,
+                                e.g. "Envigado" or "Guayabal". Use for sede-specific
+                                threshold comparisons.
+  reasonTransaction     string  free-text business reason, e.g. "Distribución de utilidades".
+                                Present when the concept gives a specific motive.
+  managementDescription string  operational note added at transaction time. May signal
+                                a policy concern, e.g. role/account mismatch.
+  transactionDesc       string  human-readable description of what was done.
+
 QUESTION-TO-FIELD GUIDANCE — read this before writing any pipeline:
 
   "How much money did [person] move today / this week / this month"
@@ -176,6 +186,33 @@ QUESTION-TO-FIELD GUIDANCE — read this before writing any pipeline:
       substring(initialTrxHour, 0, 2) <= "05" (nighttime hours), or
       transactionValule > 10000000 (high value), or
       ip differs from the customer's usual ip patterns.
+
+  "Did the Jefe de Producción / a delegate operate the wrong account?"
+    → {authorizedUserName: <name>, originProductNumber: <ventas_account>}.
+      The delegate's role is business knowledge (KB); the query finds the record.
+      Look for authorizedUserName present and originProductNumber matching the
+      account that role should NOT operate. Return authorizedUserName, customerName,
+      originProductNumber, transactionValule, and originCity.
+
+  "Are there transfers that look like dividend payments while policy says dividendos = $0?"
+    → Search for: {transactionType:"Monetaria", transactionState:"Exitosa"} AND
+      (reasonTransaction contains "utilidad" OR "dividendo" OR
+       transactionDesc contains "utilidad" OR "dividendo" OR
+       managementDescription contains "Dividendos").
+      Return documentNumber, customerName, beneficiaryName, transactionValule, timestamp.
+
+  "Which production payments exceeded P99 / the threshold for a given sede?"
+    → {transactionType:"Monetaria", transactionState:"Exitosa",
+       originCity: <"Envigado"|"Guayabal">}
+      Filter transactionValule > <threshold>. Thresholds (COP):
+        Envigado P90: 373000, P99: 673450, max: 1235500.
+        Guayabal P90: 1159970, P99: 1796580, max: 2227600.
+      Return documentNumber, customerName, transactionValule, originCity, timestamp.
+
+  "What is the difference in transaction sizes between sede Envigado and Guayabal?"
+    → {transactionType:"Monetaria", transactionState:"Exitosa"}
+      Group or filter by originCity. Compare transactionValule distributions or
+      list records per sede. originCity holds "Envigado" or "Guayabal" when present.
 
 TRAPS — a wrong assumption here silently returns an empty or wrong result:
   - "successful" = transactionState is "Exitosa". NEVER filter on a boolean or "SUCCESS" string.

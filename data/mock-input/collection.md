@@ -196,6 +196,20 @@ Colección única del Repositorio Central de Comportamiento (RCC). Cada document
 
 - **¿Existen actividades inusuales en los accesos de mis delegados?** → **Carlos Bedoya Martinez** (delegado de Pedro Picapiedra) realizó una transferencia de **$18,500,000 COP a las 02:30 AM del 2026-08-08** (`rcc_00004`, canal SVP) desde la IP `200.118.47.220` (diferente a la IP habitual `181.60.14.137` de las transacciones de Pedro). Adicionalmente, ese mismo delegado tanto inició (`authorizedUserName`) como figura como único aprobador de esa misma transacción, configurando una **violación de control dual** (un solo operador inicia y aprueba sin segunda firma).
 
+---
+
+### Escenarios adicionales — Tamales de mi abuela (base de conocimiento)
+
+Los cuatro escenarios siguientes están diseñados para que el agente pueda cruzar los eventos RCC con las reglas de negocio de la base de conocimiento.
+
+- **¿Realizó el Jefe de Producción algún movimiento en la cuenta de ventas esta semana?** → **Luis Herrera Cano** (CC `80123456`, Jefe de Producción) figura como `authorizedUserName` en una transferencia de **$350,000 COP el 2026-08-05** (6 días atrás, canal SVP), donde la cuenta origen (`originProductNumber` `"28734590123"`) es la **cuenta de ventas** de Carmen Rivera Mora (CC `43812567`). Según la matriz de autorización (KB — `01-roles-y-cuentas.md`), el Jefe de Producción no está autorizado para operar la cuenta de ventas: aplica **R001 → NO CUMPLE**. El campo `originCity` del registro es `"Envigado"`. El monto ($350,000) está por debajo del P90 de Envigado ($373,000), por lo que la señal proviene del **rol incorrecto**, no del monto.
+
+- **¿Hay transferencias que parezcan distribución de dividendos mientras la política indica Dividendos = $0?** → El **2026-07-30** (12 días atrás), Carmen Rivera Mora (CC `43812567`, Socia, canal NEG) realizó una transferencia de **$620,000 COP** desde la cuenta de ventas (`originProductNumber` `"28734590123"`) hacia la cuenta de Roberto Salazar Pinto (CC `71245893`, Socio). El campo `transactionDesc` contiene `"Distribución de utilidades socios"` y `reasonTransaction` = `"Distribución de utilidades"`. La política vigente fija **Dividendos = $0** (KB — `07-dividendos-y-distribucion-resultados.md`): aplica **R005 → NO CUMPLE**. Cuantitativamente el monto está entre el P90 ($373,000) y el P99 ($673,450) de Envigado → ALERTA MEDIO adicional.
+
+- **¿Qué pagos de producción superaron el P99 de la sede Guayabal en los últimos 30 días?** → **Luis Herrera Cano** (CC `80123456`, Jefe de Producción) realizó un pago de **$2,100,000 COP el 2026-07-27** (15 días atrás, canal NEG) desde la cuenta de operación y producción (`originProductNumber` `"73910284500"`, `originCity` `"Guayabal"`). Ese monto supera el **P99 de Guayabal ($1,796,580)** y se acerca al máximo histórico ($2,227,600) → **ALERTA ALTA** cuantitativa (KB — `11-politica-limites-monetarios-diarios.md` y `13-politica-deteccion-anomalias-montos.md`). El rol es correcto (Jefe de Producción sobre cuenta de operación), pero el monto requiere justificación.
+
+- **¿Cuál es la diferencia en el tamaño de los movimientos entre la sede Envigado y la sede Guayabal?** → Existen registros con `originCity` = `"Envigado"` y `originCity` = `"Guayabal"`. El mismo monto puede tener distinta clasificación según la sede: **$1,050,000 COP el 2026-08-04** (canal APP, cuenta de ventas, `originCity` `"Guayabal"`) está por debajo del P90 de Guayabal ($1,159,970) — nivel **normal**. Ese mismo monto en Envigado superaría el P99 ($673,450) → **ALERTA ALTO**. Los umbrales aplicables dependen del valor de `originCity` en cada registro.
+
 ## Sample records (hand-author 3 to 5)
 
 ```json

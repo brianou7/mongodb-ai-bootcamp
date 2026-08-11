@@ -181,11 +181,11 @@ type TransactionMode = (typeof import("../../src/query/schema").TRANSACTION_MODE
 // ============================================================
 
 const SEED = 424242;
-/** 487 filler + 13 anchors = 500 total events. */
-const FILLER_COUNT = 487;
+/** 483 filler + 13 existing anchors + 4 KB anchors = 500 total events. */
+const FILLER_COUNT = 483;
 const DAY_MS = 86_400_000;
 
-/** Anchor amounts in COP pesos. All below ANA_SECOND_MONTH so the ranking holds. */
+/** Anchor amounts in COP pesos. All below ANA_SECOND_MONTH so the month ranking holds. */
 const ANCHOR_AMOUNTS = {
   PEDRO_TODAY_1: 2_500_000,
   PEDRO_TODAY_2: 1_800_000,
@@ -195,6 +195,11 @@ const ANCHOR_AMOUNTS = {
   ANA_SECOND_MONTH: 38_000_000,
   JUAN_LAST_MONTH: 50_000_000,
   CARLOS_DUAL: 18_500_000,
+  // KB business anchors (Tamales de mi abuela — realistic COP amounts)
+  KB_JEFE_VENTAS: 350_000,       // R001 violation: Jefe Producción → VENTAS; < P90 Envigado
+  KB_DIVIDEND: 620_000,          // R005 violation: dividendos = $0; P90–P99 Envigado range
+  KB_OPERACION_ANOMALY: 2_100_000, // quantitative anomaly: > P99 Guayabal ($1.796.580)
+  KB_GUAYABAL_NORMAL: 1_050_000, // normal for Guayabal (<P90 $1.159.970); ALERTA ALTO for Envigado
 } as const;
 
 /** All filler monetary amounts stay below 8 M to preserve the month ranking. */
@@ -225,6 +230,26 @@ const ANA_IP = "10.30.45.211";
 const CARLOS_DOC = "1098765432";
 const CARLOS_NAME = "Carlos Bedoya Martinez";
 const CARLOS_UNUSUAL_IP = "200.118.47.220";
+
+// ---- KB business actors: Tamales de mi abuela ----
+// Carmen Rivera Mora — Socio, titular de la cuenta de ventas
+const CARMEN_DOC = "43812567";
+const CARMEN_NAME = "Carmen Rivera Mora";
+const VENTAS_ACCOUNT = "28734590123";
+const VENTAS_ACC_TYPE: ProductType = "CUENTA_CORRIENTES";
+const CARMEN_IP = "181.60.22.148";
+
+// Luis Herrera Cano — Jefe de Producción, titular de la cuenta de operación
+const LUIS_DOC = "80123456";
+const LUIS_NAME = "Luis Herrera Cano";
+const OPERACION_ACCOUNT = "73910284500";
+const OPERACION_ACC_TYPE: ProductType = "CUENTA_CORRIENTES";
+const LUIS_IP = "181.60.31.209";
+
+// Roberto Salazar Pinto — Socio, cuenta personal destino del pago de dividendos
+const ROBERTO_DOC = "71245893";
+const ROBERTO_NAME = "Roberto Salazar Pinto";
+const ROBERTO_PERSONAL_ACCOUNT = "55612870034";
 
 // ============================================================
 // PRNG and helpers
@@ -317,6 +342,10 @@ const CUSTOMERS: readonly CustomerEntry[] = [
   { documentNumber: "1034567890", documentType: "CC", customerName: "Laura Ospina Castro", account: "72345689100", accType: "CUENTA_DE_AHORRO" },
   { documentNumber: "900123456", documentType: "NIT", customerName: "Empresa XYZ Colombia SAS", account: "88712345678", accType: "CUENTA_CORRIENTES" },
   { documentNumber: "1067890123", documentType: "CC", customerName: "Andres Jimenez Vargas", account: "55893467200", accType: "CUENTA_DE_AHORRO" },
+  // Tamales de mi abuela actors
+  { documentNumber: CARMEN_DOC, documentType: "CC", customerName: CARMEN_NAME, account: VENTAS_ACCOUNT, accType: VENTAS_ACC_TYPE },
+  { documentNumber: LUIS_DOC, documentType: "CC", customerName: LUIS_NAME, account: OPERACION_ACCOUNT, accType: OPERACION_ACC_TYPE },
+  { documentNumber: ROBERTO_DOC, documentType: "CC", customerName: ROBERTO_NAME, account: ROBERTO_PERSONAL_ACCOUNT, accType: "CUENTA_CORRIENTES" },
 ];
 
 // Transaction code catalog
@@ -809,6 +838,176 @@ function anchorsDualControl(now: Date): [Omit<RccEvent, "_id">, Omit<RccEvent, "
 }
 
 // ============================================================
+// KB anchor builders — Tamales de mi abuela business scenarios
+// ============================================================
+
+/**
+ * KB Scenario 1 (R001 — rol no autorizado): Luis Herrera Cano (Jefe de Producción)
+ * opera la cuenta de ventas como usuario autorizado de Carmen Rivera Mora.
+ * Regla violada: Jefe de Producción no está autorizado para la cuenta de ventas.
+ * Monto: $350.000 COP (< P90 Envigado $373.000 — monto dentro de rango normal, pero rol incorrecto).
+ */
+function anchorKbJefeVentas(now: Date): Omit<RccEvent, "_id"> {
+  const { year, month, day } = dateFromOffset(now, 6);
+  return {
+    sessionId: "kb000001-f3e9-11ed-4d8e-438c4c9f0001",
+    transactionId: "kb000001-66f2-11ee-43a5-478c42000001",
+    initialYearTrx: year, initialMonthTrx: month, initialDayTrx: day,
+    initialTrxHour: "10420000", finalTrxHour: "10420318",
+    finalTrxYear: year, finalTrxMonth: month, finalTrxDay: day,
+    transactionCode: "0380",
+    transactionCodeDesc: "Transferencia nacional a terceros cuenta corriente",
+    responseCode: "000", responseCodeDesc: "Transacción aprobada",
+    technicalCode: "BP00000000", channel: "SVP",
+    deviceNameId: "SVP", ip: LUIS_IP,
+    authenticationType: "Token", transactionType: "Monetaria",
+    transactionState: "Exitosa",
+    documentTypeCode: "TIPDOC_FS001", documentType: "CC",
+    documentNumber: CARMEN_DOC, customerName: CARMEN_NAME,
+    authorizedUserdocumentTypeCode: "TIPDOC_FS001",
+    authorizedUserdocumentType: "CC",
+    authorizedUserdocumentNumber: LUIS_DOC,
+    authorizedUserName: LUIS_NAME,
+    currency: "COP", localAmount: ANCHOR_AMOUNTS.KB_JEFE_VENTAS,
+    transactionValule: ANCHOR_AMOUNTS.KB_JEFE_VENTAS,
+    originProductType: VENTAS_ACC_TYPE, originProductNumber: VENTAS_ACCOUNT,
+    destinyProductType: "CUENTA_CORRIENTES", destinyProductNumber: "90234567812",
+    destinyProductRelation: "Inscrita", transactionMode: "Virtual",
+    transactionVoucherNumber: 412301, commission: "NO",
+    excludeITC: false, isD2B: "SI",
+    timestamp: makeTimestamp(year, month, day),
+    authenticationTransaction: "Token",
+    entitlementRol: "Titular Rep Legal", entitlementPrivilege: "Preparador/Aprobador",
+    transactionDesc: "Pago proveedor insumos - ejecutado por Jefe de Producción",
+    managementDescription: "Jefe de Producción operando cuenta de ventas - revisar autorización según matriz de roles",
+    originCity: "Envigado",
+  };
+}
+
+/**
+ * KB Scenario 2 (R005 — dividendos = $0): Transferencia desde cuenta de ventas
+ * hacia cuenta personal de Roberto Salazar Pinto (Socio) con concepto
+ * "Distribución de utilidades socios". La política vigente fija Dividendos = $0.
+ * Monto: $620.000 COP (P90–P99 Envigado → ALERTA MEDIO cuantitativa, además de R005).
+ */
+function anchorKbDividend(now: Date): Omit<RccEvent, "_id"> {
+  const { year, month, day } = dateFromOffset(now, 12);
+  return {
+    sessionId: "kb000002-f3e9-11ed-4d8e-438c4c9f0002",
+    transactionId: "kb000002-66f2-11ee-43a5-478c42000002",
+    initialYearTrx: year, initialMonthTrx: month, initialDayTrx: day,
+    initialTrxHour: "15080000", finalTrxHour: "15080427",
+    finalTrxYear: year, finalTrxMonth: month, finalTrxDay: day,
+    transactionCode: "0381",
+    transactionCodeDesc: "Transferencia nacional a terceros cuenta corriente",
+    responseCode: "000", responseCodeDesc: "Transacción aprobada",
+    technicalCode: "BP00000000", channel: "NEG",
+    deviceNameId: "NEG", ip: CARMEN_IP,
+    authenticationType: "Token", transactionType: "Monetaria",
+    transactionState: "Exitosa",
+    documentTypeCode: "TIPDOC_FS001", documentType: "CC",
+    documentNumber: CARMEN_DOC, customerName: CARMEN_NAME,
+    currency: "COP", localAmount: ANCHOR_AMOUNTS.KB_DIVIDEND,
+    transactionValule: ANCHOR_AMOUNTS.KB_DIVIDEND,
+    originProductType: VENTAS_ACC_TYPE, originProductNumber: VENTAS_ACCOUNT,
+    destinyProductType: "CUENTA_CORRIENTES",
+    destinyProductNumber: ROBERTO_PERSONAL_ACCOUNT,
+    destinyProductRelation: "Inscrita", transactionMode: "Virtual",
+    transactionVoucherNumber: 512450, commission: "NO",
+    beneficiaryName: ROBERTO_NAME,
+    beneficiaryDocumentType: "CC",
+    beneficiaryDocumentNumber: ROBERTO_DOC,
+    excludeITC: false, isD2B: "SI",
+    timestamp: makeTimestamp(year, month, day),
+    transactionStatusApproval: "Aprobado",
+    authenticationTransaction: "Token",
+    entitlementRol: "Titular", entitlementPrivilege: "Admon Autonomo",
+    transactionDesc: "Distribución de utilidades socios",
+    reasonTransaction: "Distribución de utilidades",
+    managementDescription: "Transferencia hacia socio con concepto utilidades - política vigente: Dividendos = $0",
+    originCity: "Envigado",
+  };
+}
+
+/**
+ * KB Scenario 3 (anomalía cuantitativa): Pago desde cuenta de operación,
+ * Sede Guayabal. Monto: $2.100.000 COP supera el P99 de Guayabal ($1.796.580)
+ * → ALERTA ALTA. Por debajo del máximo histórico ($2.227.600).
+ */
+function anchorKbOperacionAnomaly(now: Date): Omit<RccEvent, "_id"> {
+  const { year, month, day } = dateFromOffset(now, 15);
+  return {
+    sessionId: "kb000003-f3e9-11ed-4d8e-438c4c9f0003",
+    transactionId: "kb000003-66f2-11ee-43a5-478c42000003",
+    initialYearTrx: year, initialMonthTrx: month, initialDayTrx: day,
+    initialTrxHour: "09300000", finalTrxHour: "09300634",
+    finalTrxYear: year, finalTrxMonth: month, finalTrxDay: day,
+    transactionCode: "0381",
+    transactionCodeDesc: "Transferencia nacional a terceros cuenta corriente",
+    responseCode: "000", responseCodeDesc: "Transacción aprobada",
+    technicalCode: "BP00000000", channel: "NEG",
+    deviceNameId: "NEG", ip: LUIS_IP,
+    authenticationType: "Token", transactionType: "Monetaria",
+    transactionState: "Exitosa",
+    documentTypeCode: "TIPDOC_FS001", documentType: "CC",
+    documentNumber: LUIS_DOC, customerName: LUIS_NAME,
+    currency: "COP", localAmount: ANCHOR_AMOUNTS.KB_OPERACION_ANOMALY,
+    transactionValule: ANCHOR_AMOUNTS.KB_OPERACION_ANOMALY,
+    originProductType: OPERACION_ACC_TYPE, originProductNumber: OPERACION_ACCOUNT,
+    destinyProductType: "CUENTA_CORRIENTES", destinyProductNumber: "67123409812",
+    destinyProductRelation: "Inscrita", transactionMode: "Virtual",
+    transactionVoucherNumber: 634782, commission: "NO",
+    excludeITC: false, isD2B: "SI",
+    timestamp: makeTimestamp(year, month, day),
+    transactionStatusApproval: "Aprobado",
+    authenticationTransaction: "Token",
+    entitlementRol: "Titular", entitlementPrivilege: "Admon Autonomo",
+    transactionDesc: "Pago proveedor producción - Sede Guayabal",
+    reasonTransaction: "Pago a proveedor de producción",
+    originCity: "Guayabal",
+  };
+}
+
+/**
+ * KB Scenario 4 (comparación de sedes): Transferencia desde cuenta de ventas,
+ * Sede Guayabal. Monto: $1.050.000 COP — normal para Guayabal (<P90 $1.159.970)
+ * pero constituiría ALERTA ALTO para Envigado (>P99 $673.450). Permite al agente
+ * demostrar que el umbral aplicable depende de la sede del movimiento.
+ */
+function anchorKbGuayabalNormal(now: Date): Omit<RccEvent, "_id"> {
+  const { year, month, day } = dateFromOffset(now, 7);
+  return {
+    sessionId: "kb000004-f3e9-11ed-4d8e-438c4c9f0004",
+    transactionId: "kb000004-66f2-11ee-43a5-478c42000004",
+    initialYearTrx: year, initialMonthTrx: month, initialDayTrx: day,
+    initialTrxHour: "13150000", finalTrxHour: "13150511",
+    finalTrxYear: year, finalTrxMonth: month, finalTrxDay: day,
+    transactionCode: "0400",
+    transactionCodeDesc: "Pago de facturas y servicios",
+    responseCode: "000", responseCodeDesc: "Transacción aprobada",
+    technicalCode: "BP00000000", channel: "APP",
+    deviceNameId: "Dispositivo móvil", ip: CARMEN_IP,
+    authenticationType: "Biometría huella", transactionType: "Monetaria",
+    transactionState: "Exitosa",
+    documentTypeCode: "TIPDOC_FS001", documentType: "CC",
+    documentNumber: CARMEN_DOC, customerName: CARMEN_NAME,
+    currency: "COP", localAmount: ANCHOR_AMOUNTS.KB_GUAYABAL_NORMAL,
+    transactionValule: ANCHOR_AMOUNTS.KB_GUAYABAL_NORMAL,
+    originProductType: VENTAS_ACC_TYPE, originProductNumber: VENTAS_ACCOUNT,
+    destinyProductType: "CUENTA_CORRIENTES", destinyProductNumber: "34521078900",
+    destinyProductRelation: "Inscrita", transactionMode: "Virtual",
+    transactionVoucherNumber: 718923, commission: "NO",
+    excludeITC: false, isD2B: "SI",
+    timestamp: makeTimestamp(year, month, day),
+    authenticationTransaction: "Biometría huella",
+    entitlementRol: "Titular", entitlementPrivilege: "Admon Autonomo",
+    transactionDesc: "Pago operaciones - Sede Guayabal",
+    originCity: "Guayabal",
+    brandModel: "Samsung Galaxy", osVersion: "Android", appVersion: "25.3.0",
+  };
+}
+
+// ============================================================
 // Build full dataset
 // ============================================================
 
@@ -832,6 +1031,12 @@ function buildEvents(now: Date): RccEvent[] {
   const [dualInit, dualAppr] = anchorsDualControl(now);
   raw.push(dualInit);
   raw.push(dualAppr);
+
+  // KB business anchors (Tamales de mi abuela)
+  raw.push(anchorKbJefeVentas(now));
+  raw.push(anchorKbDividend(now));
+  raw.push(anchorKbOperacionAnomaly(now));
+  raw.push(anchorKbGuayabalNormal(now));
 
   // Sort chronologically, then assign stable IDs.
   raw.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
@@ -951,6 +1156,21 @@ export function generateActivityEvents(now: Date = new Date()): RccEvent[] {
       throw new Error(`Non-monetary record ${e._id} has non-zero transactionValule.`);
     }
   }
+
+  // Invariant 7: KB business anchors are present and have correct amounts.
+  const kbJefeVentas = events.find((e) => e.authorizedUserName === LUIS_NAME && e.originProductNumber === VENTAS_ACCOUNT && e.transactionType === MONETARY_TRANSACTION_TYPE);
+  if (!kbJefeVentas) throw new Error("KB anchor: Jefe de Producción / cuenta ventas not found; generator broken.");
+  if ((kbJefeVentas.transactionValule ?? 0) !== ANCHOR_AMOUNTS.KB_JEFE_VENTAS) throw new Error("KB anchor: R001 amount mismatch.");
+
+  const kbDividend = events.find((e) => e.documentNumber === CARMEN_DOC && e.beneficiaryDocumentNumber === ROBERTO_DOC && e.transactionType === MONETARY_TRANSACTION_TYPE);
+  if (!kbDividend) throw new Error("KB anchor: dividend payment not found; generator broken.");
+  if ((kbDividend.transactionValule ?? 0) !== ANCHOR_AMOUNTS.KB_DIVIDEND) throw new Error("KB anchor: R005 dividend amount mismatch.");
+
+  const kbAnomaly = events.find((e) => e.documentNumber === LUIS_DOC && e.originProductNumber === OPERACION_ACCOUNT && (e.transactionValule ?? 0) === ANCHOR_AMOUNTS.KB_OPERACION_ANOMALY);
+  if (!kbAnomaly) throw new Error("KB anchor: Guayabal anomaly not found; generator broken.");
+
+  const kbGuayabal = events.find((e) => e.documentNumber === CARMEN_DOC && e.originCity === "Guayabal" && (e.transactionValule ?? 0) === ANCHOR_AMOUNTS.KB_GUAYABAL_NORMAL);
+  if (!kbGuayabal) throw new Error("KB anchor: Guayabal normal transfer not found; generator broken.");
 
   // Invariant 6: per-customer totals sum to the global successful monetary total.
   const global = events.filter((e) => e.transactionType === MONETARY_TRANSACTION_TYPE && e.transactionState === "Exitosa").reduce((s, e) => s + (e.transactionValule ?? 0), 0);

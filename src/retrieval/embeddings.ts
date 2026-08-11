@@ -74,8 +74,18 @@ export class VoyageEmbeddings extends Embeddings {
     });
 
     if (!res.ok) {
+      // The proxy or model may not support contextualizedembeddings; fall back to
+      // standard document embeddings so the load still succeeds.
+      const errText = await res.text();
+      if (res.status === 400 || res.status === 404 || res.status === 422) {
+        console.warn(
+          `  [embeddings] contextualizedembeddings unavailable (HTTP ${res.status}); ` +
+            `falling back to standard document embeddings.`,
+        );
+        return this.embedDocuments(chunks);
+      }
       throw new Error(
-        `Voyage contextualizedembeddings failed: HTTP ${res.status} ${await res.text()}` +
+        `Voyage contextualizedembeddings failed: HTTP ${res.status} ${errText}` +
           `\nIf the proxy returned 404, set VOYAGE_API_BASE=https://api.voyageai.com/v1 with your own pa-... key.`,
       );
     }

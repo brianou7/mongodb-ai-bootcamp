@@ -5,6 +5,7 @@ import { z } from "zod";
 import { getChatModel } from "../llm/model";
 import { getDb } from "../db/client";
 import { getConfig } from "../config";
+import { getConfig as getLGConfig } from "@langchain/langgraph";
 import { buildSystemPrompt } from "./prompts/index";
 import { messageContentToString, extractJsonObject } from "../util/message";
 
@@ -58,8 +59,16 @@ export const structuredQuery = tool(
       }
     }
 
+    // Company scoping: if the session carries a company_nit, prepend a mandatory
+    // $match so the delegado only sees records belonging to their company.
+    const lgConfig = getLGConfig();
+    const companyNit = typeof lgConfig.configurable?.company_nit === "string" ? lgConfig.configurable.company_nit : undefined;
+    const scopedPipeline: Stage[] = companyNit
+      ? [{ $match: { documentNumber: companyNit } }, ...pipeline]
+      : pipeline;
+
     // Trailing result cap for demo ergonomics (clamps any larger output).
-    const capped: Stage[] = [...pipeline, { $limit: cfg.QUERY_RESULT_CAP }];
+    const capped: Stage[] = [...scopedPipeline, { $limit: cfg.QUERY_RESULT_CAP }];
 
     const db = await getDb();
     const records = await db

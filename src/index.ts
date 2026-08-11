@@ -21,6 +21,7 @@ async function main(): Promise<void> {
       pattern: { type: "string", default: "hybrid" },
       thread: { type: "string", default: "demo" },
       user: { type: "string", default: "user_demo" },
+      company: { type: "string" },
     },
   });
 
@@ -28,6 +29,7 @@ async function main(): Promise<void> {
   const pattern = values.pattern ?? "hybrid";
   const threadId = values.thread ?? "demo";
   const userId = values.user ?? "user_demo";
+  const companyNit = values.company;
 
   if (!question) {
     throw new Error(
@@ -45,7 +47,7 @@ async function main(): Promise<void> {
   const agent = await buildPatternAgent(pattern);
   const result = await agent.invoke(
     { messages: [new HumanMessage(question)] },
-    { configurable: { thread_id: threadId, user_id: userId }, recursionLimit: 25 },
+    { configurable: { thread_id: threadId, user_id: userId, company_nit: companyNit }, recursionLimit: 25 },
   );
 
   const last = result.messages.at(-1);

@@ -38,9 +38,18 @@ export async function buildAgent(tools: AgentTool[], systemPrompt: string) {
       if (formatted) memoryBlock = `\n\nKnown context about the current user (long-term memory):\n${formatted}`;
     }
 
+    // Company scoping: tell the model which company this session is restricted to.
+    // All structured_query calls are automatically filtered by company_nit at the
+    // tool layer, so this block is informational — it lets the model answer
+    // accurately ("you can only see records for NIT 900123456").
+    const companyNit = typeof config.configurable?.company_nit === "string" ? config.configurable.company_nit : undefined;
+    const companyBlock = companyNit
+      ? `\n\nSesión acotada a la empresa con NIT ${companyNit}. Solo puedes ver y reportar registros de esta empresa. Si el usuario pregunta por otra empresa, indica que no tienes acceso a esos registros.`
+      : "";
+
     // The system prompt (+ any recalled memory) is prepended each turn. It is
     // not stored in state, so it does not accumulate in the persisted checkpoint.
-    const response = await model.invoke([new SystemMessage(systemPrompt + memoryBlock), ...state.messages]);
+    const response = await model.invoke([new SystemMessage(systemPrompt + companyBlock + memoryBlock), ...state.messages]);
     return { messages: [response] };
   }
 

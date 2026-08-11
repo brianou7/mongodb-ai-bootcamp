@@ -1,11 +1,11 @@
 import { readdir, readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { Document } from "@langchain/core/documents";
 import { bootstrapCredentials } from "../src/credentials";
 import { getConfig } from "../src/config";
 import { getDb, closeMongoClient } from "../src/db/client";
-import { getVectorStore, getKbCollection } from "../src/retrieval/vectorStore";
+import { getKbCollection } from "../src/retrieval/vectorStore";
+import { getEmbeddings } from "../src/retrieval/embeddings";
 import { generateActivityEvents } from "./sample/activity_events";
 
 /**
@@ -34,40 +34,66 @@ function chunkMarkdown(source: string, text: string): Chunk[] {
   const head = parts[0] ?? "";
   const title = head.match(/^#\s+(.+)$/m)?.[1]?.trim() ?? source;
   const introBody = head.replace(/^#\s+.+$/m, "").trim();
-  if (introBody) chunks.push({ text: introBody, source, section: `${title} (overview)` });
+  // Prefix every chunk with the document title so the embedding carries
+  // that anchor even before contextualized embeddings apply.
+  if (introBody)
+    chunks.push({ text: `[${title}]\n${introBody}`, source, section: `${title} (overview)` });
 
   for (let i = 1; i < parts.length; i++) {
     const block = parts[i] ?? "";
     const nl = block.indexOf("\n");
     const heading = (nl === -1 ? block : block.slice(0, nl)).trim();
     const body = (nl === -1 ? "" : block.slice(nl + 1)).trim();
-    if (body) chunks.push({ text: `${heading}\n${body}`, source, section: heading });
+    if (body) chunks.push({ text: `[${title}] ${heading}\n${body}`, source, section: heading });
   }
   return chunks;
+}
+
+interface KbRecord {
+  text: string;
+  source: string;
+  section: string;
+  embedding: number[];
 }
 
 async function loadKnowledgeBase(): Promise<number> {
   const cfg = getConfig();
   const files = (await readdir(KB_DIR)).filter((f) => f.endsWith(".md"));
 
-  const chunks: Chunk[] = [];
+  // Group chunks by source file so we can send each document's full text as
+  // context to /contextualizedembeddings — the endpoint embeds each chunk
+  // while the model sees the whole document, resolving cross-section references
+  // ("el umbral", "P90") that would otherwise be opaque in isolation.
+  const byFile = new Map<string, { chunks: Chunk[]; fullText: string }>();
   for (const file of files) {
-    const text = await readFile(join(KB_DIR, file), "utf8");
-    chunks.push(...chunkMarkdown(file, text));
+    const fullText = await readFile(join(KB_DIR, file), "utf8");
+    const chunks = chunkMarkdown(file, fullText);
+    if (chunks.length > 0) byFile.set(file, { chunks, fullText });
   }
 
   const collection = await getKbCollection();
   await collection.deleteMany({});
 
-  const store = await getVectorStore();
-  const docs = chunks.map(
-    (c) => new Document({ pageContent: c.text, metadata: { source: c.source, section: c.section } }),
-  );
-  await store.addDocuments(docs); // embeds via Voyage and inserts
+  const embedder = getEmbeddings();
+  const records: KbRecord[] = [];
+
+  for (const [, { chunks, fullText }] of byFile) {
+    const texts = chunks.map((c) => c.text);
+    const vectors = await embedder.embedChunksWithContext(texts, fullText);
+    for (let i = 0; i < chunks.length; i++) {
+      const chunk = chunks[i]!;
+      const embedding = vectors[i]!;
+      records.push({ text: chunk.text, source: chunk.source, section: chunk.section, embedding });
+    }
+  }
+
+  if (records.length > 0) {
+    await collection.insertMany(records as unknown as Array<Record<string, unknown>>);
+  }
 
   await ensureVectorIndex();
-  console.log(`  KB: ${docs.length} chunks from ${files.length} files into "${cfg.KB_COLLECTION}".`);
-  return docs.length;
+  console.log(`  KB: ${records.length} chunks from ${byFile.size} files into "${cfg.KB_COLLECTION}".`);
+  return records.length;
 }
 
 async function ensureVectorIndex(): Promise<void> {

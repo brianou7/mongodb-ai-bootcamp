@@ -20,7 +20,7 @@ todavía.
 ## Prompt: ubica mi agente
 
 ```
-Nuestro caso de uso: chatBot que resuelve dudas de los clientes empresariales respecto a las transacciones que se han realizado en la empresa, dadas unas reglas definidas por el cliente en un archivo MD. El patrón que elegimos es hybrid.
+Nuestro caso de uso: chatBott que resuelve dudas de los clientes empresariales respecto a las transacciones que se han realizado en la empresa, dadas unas reglas definidas por el cliente en un archivo MD. El patrón que elegimos es hybrid.
 
 Con este scaffold, dime:
 1. Si mi patrón encaja con el caso de uso, o si otro patrón encaja mejor y por qué.
